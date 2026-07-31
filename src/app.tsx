@@ -1,12 +1,14 @@
-import React, {useEffect, useState} from 'react'
+import React, {useEffect, useRef, useState} from 'react'
 import {Box, Text, useApp, useInput} from 'ink'
 import TextInput from 'ink-text-input'
 import {ProgressBar} from './components/progress-bar'
 import {Shortcuts} from './components/shortcuts'
+import {Spinner} from './components/spinner'
 import {Welcome} from './components/welcome'
 import {Screen, Gap, useColumns, contentWidth} from './components/screen'
 import {clickTargetAt, type ClickTarget} from './lib/click-map'
 import {useMouseClick, stripMouseReports} from './lib/use-mouse-click'
+import {generateChecklist, GenerationError, type GenErrorCode} from './lib/ai'
 import {ThemeProvider, useTheme, nextThemeMode, type ThemeMode} from './theme'
 import {
   loadChecklists,
@@ -14,6 +16,7 @@ import {
   newChecklist,
   newGroup,
   newTask,
+  checklistFromAi,
   progress,
   type Checklist,
 } from './store'
@@ -26,15 +29,45 @@ type Phase =
   | {name: 'detail'; id: string}
   | {name: 'addTask'; id: string}
   | {name: 'confirmDelete'; id: string}
+  | {name: 'prompt'}
+  | {name: 'generating'; goal: string}
+  | {name: 'genError'; goal: string; code: GenErrorCode}
 
 // Each phase declares its own keyboard hints — the row shown at the bottom.
+// (genError's hints are built dynamically — retry only makes sense for failures.)
 const HINTS: Record<Phase['name'], Array<[string, string]>> = {
-  list: [['↑↓', 'move'], ['↵', 'open'], ['n', 'new'], ['d', 'delete'], ['^t', 'theme'], ['^c', 'quit']],
+  list: [['↑↓', 'move'], ['↵', 'open'], ['g', 'generate'], ['n', 'new'], ['d', 'delete'], ['^t', 'theme'], ['^c', 'quit']],
   new: [['↵', 'create'], ['esc', 'cancel']],
   detail: [['↑↓', 'move'], ['space', 'toggle'], ['a', 'add task'], ['esc', 'back'], ['^c', 'quit']],
   addTask: [['↵', 'add'], ['esc', 'done']],
   confirmDelete: [['y', 'delete'], ['n', 'keep']],
+  prompt: [['↵', 'generate'], ['esc', 'back']],
+  generating: [['esc', 'cancel']],
+  genError: [['esc', 'back']],
 }
+
+// Human-facing copy for each failure — plain language, says what happened and
+// what to do next. No env-var jargon in the headline.
+const GEN_ERROR_COPY: Record<GenErrorCode, {title: string; body: string; hint?: string}> = {
+  NO_KEY: {
+    title: "AI generation isn't set up yet",
+    body: 'Connect an OpenRouter key and I can turn any goal into a ready-made checklist.',
+    hint: 'Set OPENROUTER_API_KEY in your shell, then restart checklist.',
+  },
+  NETWORK: {
+    title: "Couldn't reach the AI",
+    body: 'Looks like a connection hiccup. Check your internet and give it another go.',
+  },
+  SERVICE: {
+    title: 'The AI is having a moment',
+    body: 'The service didn’t come through this time. It usually works on a second try.',
+  },
+  BAD_RESPONSE: {
+    title: 'That came back garbled',
+    body: 'The AI returned something unexpected. Try again — a fresh attempt normally does it.',
+  },
+}
+const RETRY_LABEL = '↵  Try again'
 
 const truncate = (s: string, n: number) => (s.length > n ? `${s.slice(0, n - 1)}…` : s)
 
@@ -74,6 +107,7 @@ function AppInner({cycleTheme}: {cycleTheme: () => void}) {
   const [listCursor, setListCursor] = useState(0)
   const [taskCursor, setTaskCursor] = useState(0)
   const [draft, setDraft] = useState('') // shared value for the text inputs
+  const genAbort = useRef<AbortController | undefined>(undefined) // cancels an in-flight generation
 
   // Load once on startup.
   useEffect(() => {
@@ -124,6 +158,35 @@ function AppInner({cycleTheme}: {cycleTheme: () => void}) {
       })),
     }))
 
+  // Run a generation. On success, save the checklist and open it; on failure,
+  // land on a friendly error screen carrying the goal so retry re-runs it.
+  const startGenerate = (goal: string) => {
+    const controller = new AbortController()
+    genAbort.current = controller
+    setPhase({name: 'generating', goal})
+    void (async () => {
+      try {
+        const ai = await generateChecklist(goal, controller.signal)
+        if (controller.signal.aborted) return
+        const created = checklistFromAi(ai)
+        persist([created, ...checklists])
+        setDraft('')
+        setListCursor(0)
+        setTaskCursor(0)
+        setPhase({name: 'detail', id: created.id})
+      } catch (error) {
+        if (controller.signal.aborted) return // user cancelled — handled elsewhere
+        const code = error instanceof GenerationError ? error.code : 'SERVICE'
+        setPhase({name: 'genError', goal, code})
+      }
+    })()
+  }
+
+  const cancelGenerate = () => {
+    genAbort.current?.abort()
+    setPhase({name: 'prompt'}) // back to the goal field with the text still there
+  }
+
   // --- Keyboard -------------------------------------------------------------
   useInput((input, key) => {
     // Global — works in every phase.
@@ -151,6 +214,26 @@ function AppInner({cycleTheme}: {cycleTheme: () => void}) {
       return
     }
 
+    // Goal prompt: TextInput handles typing + ↵ (onSubmit generates); we only catch esc.
+    if (phase.name === 'prompt') {
+      if (key.escape) {
+        setDraft('')
+        setPhase({name: 'list'})
+      }
+      return
+    }
+
+    if (phase.name === 'generating') {
+      if (key.escape) cancelGenerate()
+      return
+    }
+
+    if (phase.name === 'genError') {
+      if (key.return && phase.code !== 'NO_KEY') startGenerate(phase.goal)
+      else if (key.escape) setPhase({name: 'list'})
+      return
+    }
+
     if (phase.name === 'list') {
       if (key.upArrow) setListCursor(c => Math.max(0, c - 1))
       if (key.downArrow) setListCursor(c => Math.min(checklists.length - 1, c + 1))
@@ -158,6 +241,10 @@ function AppInner({cycleTheme}: {cycleTheme: () => void}) {
       if (key.return && current) {
         setTaskCursor(0)
         setPhase({name: 'detail', id: current.id})
+      }
+      if (input === 'g') {
+        setDraft('')
+        setPhase({name: 'prompt'})
       }
       if (input === 'n') {
         setDraft('')
@@ -198,6 +285,10 @@ function AppInner({cycleTheme}: {cycleTheme: () => void}) {
         if (keyName === '↵' && current) return () => {
           setTaskCursor(0)
           setPhase({name: 'detail', id: current.id})
+        }
+        if (keyName === 'g') return () => {
+          setDraft('')
+          setPhase({name: 'prompt'})
         }
         if (keyName === 'n') return () => {
           setDraft('')
@@ -242,6 +333,23 @@ function AppInner({cycleTheme}: {cycleTheme: () => void}) {
         }
         if (keyName === 'n') return () => setPhase({name: 'list'})
         break
+      case 'prompt':
+        if (keyName === '↵') return () => {
+          const goal = draft.trim()
+          if (goal) startGenerate(goal)
+        }
+        if (keyName === 'esc') return () => {
+          setDraft('')
+          setPhase({name: 'list'})
+        }
+        break
+      case 'generating':
+        if (keyName === 'esc') return cancelGenerate
+        break
+      case 'genError':
+        if (keyName === '↵' && phase.code !== 'NO_KEY') return () => startGenerate(phase.goal)
+        if (keyName === 'esc') return () => setPhase({name: 'list'})
+        break
     }
     return undefined
   }
@@ -251,10 +359,20 @@ function AppInner({cycleTheme}: {cycleTheme: () => void}) {
   // card/task whose text happens to appear on that same row. padX stays small so
   // a target only matches on its own text (a wide padX let one row's target
   // swallow clicks meant for another). padY covers a card's border rows.
+  // genError shows a retry hint only when retrying can actually help (not for a
+  // missing key, which needs a restart).
+  const hints: Array<[string, string]> =
+    phase.name === 'genError' && phase.code !== 'NO_KEY'
+      ? [['↵', 'try again'], ...HINTS.genError]
+      : HINTS[phase.name]
+
   const clickTargets: ClickTarget[] = []
-  for (const [keyName, label] of HINTS[phase.name]) {
+  for (const [keyName, label] of hints) {
     const action = hintAction(keyName)
     if (action) clickTargets.push({match: `${keyName} ${label}`, action})
+  }
+  if (phase.name === 'genError' && phase.code !== 'NO_KEY') {
+    clickTargets.push({match: RETRY_LABEL, padX: 2, padY: 1, action: () => startGenerate(phase.goal)})
   }
   if (phase.name === 'list') {
     checklists.forEach((c, i) =>
@@ -294,7 +412,11 @@ function AppInner({cycleTheme}: {cycleTheme: () => void}) {
   return (
     <Screen>
       {phase.name === 'list' && <Welcome count={checklists.length} width={width} />}
-      {(phase.name === 'new' || phase.name === 'confirmDelete') && (
+      {(phase.name === 'new' ||
+        phase.name === 'confirmDelete' ||
+        phase.name === 'prompt' ||
+        phase.name === 'generating' ||
+        phase.name === 'genError') && (
         <Text bold color={theme.accent}>✓ checklists</Text>
       )}
 
@@ -305,7 +427,8 @@ function AppInner({cycleTheme}: {cycleTheme: () => void}) {
           <Box flexDirection="column">
             <Text color={theme.muted} dimColor={theme.dimMuted}>No checklists yet.</Text>
             <Text color={theme.muted} dimColor={theme.dimMuted}>
-              Press <Text color={theme.accent} bold>n</Text> to create your first one.
+              Press <Text color={theme.accent} bold>g</Text> to generate one with AI, or{' '}
+              <Text color={theme.accent} bold>n</Text> to add one yourself.
             </Text>
           </Box>
         ) : (
@@ -356,6 +479,73 @@ function AppInner({cycleTheme}: {cycleTheme: () => void}) {
           </Box>
         </Box>
       )}
+
+      {phase.name === 'prompt' && (
+        <Box flexDirection="column" width={width}>
+          <Text color={theme.text}>What do you want to get done?</Text>
+          <Text color={theme.muted} dimColor={theme.dimMuted}>AI will turn it into a step-by-step checklist.</Text>
+          <Gap />
+          <Box>
+            <Text color={theme.accent}>❯ </Text>
+            <Box flexGrow={1} flexShrink={1} minWidth={0}>
+              <TextInput
+                value={draft}
+                onChange={v => setDraft(stripMouseReports(v))}
+                onSubmit={value => {
+                  const goal = value.trim()
+                  if (goal) startGenerate(goal)
+                }}
+                placeholder="e.g. Plan a 3-day trip to Lisbon"
+              />
+            </Box>
+          </Box>
+        </Box>
+      )}
+
+      {phase.name === 'generating' && (
+        <Box flexDirection="column" width={width}>
+          <Text>
+            <Spinner />
+            <Text color={theme.text}> Building your checklist…</Text>
+          </Text>
+          <Text color={theme.muted} dimColor={theme.dimMuted} wrap="truncate-end">{`“${phase.goal}”`}</Text>
+        </Box>
+      )}
+
+      {phase.name === 'genError' &&
+        (() => {
+          const copy = GEN_ERROR_COPY[phase.code]
+          const canRetry = phase.code !== 'NO_KEY'
+          return (
+            <Box flexDirection="column" width={width}>
+              <Box
+                flexDirection="column"
+                width={width}
+                borderStyle="round"
+                borderColor={theme.accent}
+                borderDimColor={theme.dimMuted}
+                paddingX={2}
+                paddingY={1}
+              >
+                <Text bold color={theme.text} wrap="wrap">{copy.title}</Text>
+                <Text color={theme.muted} dimColor={theme.dimMuted} wrap="wrap">{copy.body}</Text>
+                {copy.hint ? (
+                  <>
+                    <Text> </Text>
+                    <Text color={theme.muted} dimColor={theme.dimMuted} wrap="wrap">{copy.hint}</Text>
+                  </>
+                ) : null}
+              </Box>
+              {canRetry ? (
+                <Box marginTop={1}>
+                  <Box borderStyle="round" borderColor={theme.accent} paddingX={2}>
+                    <Text bold color={theme.accent}>{RETRY_LABEL}</Text>
+                  </Box>
+                </Box>
+              ) : null}
+            </Box>
+          )
+        })()}
 
       {(phase.name === 'detail' || phase.name === 'addTask') &&
         openChecklist &&
@@ -451,7 +641,7 @@ function AppInner({cycleTheme}: {cycleTheme: () => void}) {
         })()}
 
       <Gap />
-      <Shortcuts items={HINTS[phase.name]} />
+      <Shortcuts items={hints} />
     </Screen>
   )
 }

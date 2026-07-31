@@ -45,6 +45,22 @@ export const newChecklist = (title: string): Checklist => ({
 export const newGroup = (title: string): Group => ({id: randomUUID(), title, tasks: []})
 export const newTask = (text: string): Task => ({id: randomUUID(), text, done: false})
 
+// Build a checklist from the AI's shape: each item is a phase (group), each
+// subtask a task. This is why the model has always had groups — the AI output
+// drops straight in.
+export function checklistFromAi(ai: {title: string; items: Array<{text: string; subtasks: string[]}>}): Checklist {
+  return {
+    id: randomUUID(),
+    title: ai.title,
+    createdAt: new Date().toISOString(),
+    groups: ai.items.map(item => ({
+      id: randomUUID(),
+      title: item.text,
+      tasks: (item.subtasks ?? []).map(text => ({id: randomUUID(), text, done: false})),
+    })),
+  }
+}
+
 // --- Derived ----------------------------------------------------------------
 export function progress(checklist: Checklist): {done: number; total: number} {
   const tasks = checklist.groups.flatMap(group => group.tasks)
