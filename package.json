@@ -1,0 +1,28 @@
+{
+  "name": "checklist-tui",
+  "version": "0.1.0",
+  "description": "A local, keyboard-first checklist manager in your terminal.",
+  "type": "module",
+  "bin": {
+    "checklist": "./dist/cli.js"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "scripts": {
+    "dev": "tsx src/cli.tsx",
+    "typecheck": "tsc --noEmit",
+    "build": "tsc"
+  },
+  "dependencies": {
+    "ink": "^5.0.1",
+    "ink-text-input": "^6.0.0",
+    "react": "^18.3.1"
+  },
+  "devDependencies": {
+    "@types/node": "^20.14.0",
+    "@types/react": "^18.3.3",
+    "tsx": "^4.16.2",
+    "typescript": "^5.5.4"
+  }
+}
