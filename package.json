@@ -1,18 +1,40 @@
 {
   "name": "checklist-tui",
   "version": "0.1.0",
-  "description": "A local, keyboard-first checklist manager in your terminal.",
+  "description": "A local, keyboard-first checklist manager for your terminal.",
+  "keywords": [
+    "checklist",
+    "todo",
+    "tui",
+    "cli",
+    "terminal",
+    "ink"
+  ],
   "type": "module",
+  "license": "MIT",
+  "author": "AnushriyaB",
+  "homepage": "https://github.com/AnushriyaB/checklist-tui#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/AnushriyaB/checklist-tui.git"
+  },
+  "bugs": {
+    "url": "https://github.com/AnushriyaB/checklist-tui/issues"
+  },
   "bin": {
     "checklist": "./dist/cli.js"
   },
+  "files": [
+    "dist"
+  ],
   "engines": {
     "node": ">=18"
   },
   "scripts": {
     "dev": "tsx src/cli.tsx",
     "typecheck": "tsc --noEmit",
-    "build": "tsc"
+    "build": "tsup",
+    "prepare": "npm run build"
   },
   "dependencies": {
     "ink": "^5.0.1",
@@ -22,6 +44,7 @@
   "devDependencies": {
     "@types/node": "^20.14.0",
     "@types/react": "^18.3.3",
+    "tsup": "^8.5.1",
     "tsx": "^4.16.2",
     "typescript": "^5.5.4"
   }

@@ -182,7 +182,7 @@ function AppInner({cycleTheme}: {cycleTheme: () => void}) {
       if (key.escape) setPhase({name: 'list'})
       return
     }
-  })
+  }, {isActive: Boolean(process.stdin.isTTY)}) // no raw-mode crash when piped / non-TTY
 
   // --- Mouse ----------------------------------------------------------------
   // Anything a mouse user would expect to press is clickable. Targets are found
