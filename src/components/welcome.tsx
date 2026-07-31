@@ -66,16 +66,15 @@ export function Welcome({count, width}: {count: number; width: number}) {
       {/* flexShrink + minWidth=0 let the text wrap within the remaining space
           instead of pushing the card wider than the terminal. */}
       <Box flexDirection="column" flexGrow={1} flexShrink={1} minWidth={0}>
-        <Text bold color={theme.text}>checklist</Text>
-        <Text color={theme.muted} dimColor={theme.dimMuted} wrap="wrap">
-          turn any goal into a clear, checkable plan — right in your terminal.
+        <Text wrap="truncate-end">
+          <Text bold color={theme.text}>checklist</Text>
+          {count > 0 ? (
+            <Text color={theme.muted} dimColor={theme.dimMuted}>{`   ${count} saved`}</Text>
+          ) : null}
         </Text>
-        <Text> </Text>
-        <Text color={theme.muted} dimColor={theme.dimMuted} wrap="truncate-end">· everything saved locally, no account</Text>
-        <Text color={theme.muted} dimColor={theme.dimMuted} wrap="truncate-end">· AI-generated checklists coming soon</Text>
-        {count > 0 ? (
-          <Text color={theme.muted} dimColor={theme.dimMuted} wrap="truncate-end">{`· ${count} saved ${count === 1 ? 'list' : 'lists'}`}</Text>
-        ) : null}
+        <Text color={theme.muted} dimColor={theme.dimMuted} wrap="wrap">
+          Turn any goal into a checkable plan — saved locally, no account.
+        </Text>
       </Box>
     </Box>
   )

@@ -46,26 +46,12 @@ const HINTS: Record<Phase['name'], Array<[string, string]>> = {
   genError: [['esc', 'back']],
 }
 
-// Human-facing copy for each failure — plain language, says what happened and
-// what to do next. No env-var jargon in the headline.
-const GEN_ERROR_COPY: Record<GenErrorCode, {title: string; body: string; hint?: string}> = {
-  NO_KEY: {
-    title: "AI generation isn't set up yet",
-    body: 'Connect an OpenRouter key and I can turn any goal into a ready-made checklist.',
-    hint: 'Set OPENROUTER_API_KEY in your shell, then restart checklist.',
-  },
-  NETWORK: {
-    title: "Couldn't reach the AI",
-    body: 'Looks like a connection hiccup. Check your internet and give it another go.',
-  },
-  SERVICE: {
-    title: 'The AI is having a moment',
-    body: 'The service didn’t come through this time. It usually works on a second try.',
-  },
-  BAD_RESPONSE: {
-    title: 'That came back garbled',
-    body: 'The AI returned something unexpected. Try again — a fresh attempt normally does it.',
-  },
+// One friendly, provider-agnostic message for every failure. The user never
+// sees "OpenRouter", an API-key name, or any other plumbing — just what happened
+// and the two ways forward (retry, or go back).
+const GEN_ERROR = {
+  title: "Couldn't generate that checklist",
+  body: 'Something went wrong this time. Give it another try, or head back and add one yourself.',
 }
 const RETRY_LABEL = '↵  Try again'
 
@@ -229,7 +215,7 @@ function AppInner({cycleTheme}: {cycleTheme: () => void}) {
     }
 
     if (phase.name === 'genError') {
-      if (key.return && phase.code !== 'NO_KEY') startGenerate(phase.goal)
+      if (key.return) startGenerate(phase.goal)
       else if (key.escape) setPhase({name: 'list'})
       return
     }
@@ -347,7 +333,7 @@ function AppInner({cycleTheme}: {cycleTheme: () => void}) {
         if (keyName === 'esc') return cancelGenerate
         break
       case 'genError':
-        if (keyName === '↵' && phase.code !== 'NO_KEY') return () => startGenerate(phase.goal)
+        if (keyName === '↵') return () => startGenerate(phase.goal)
         if (keyName === 'esc') return () => setPhase({name: 'list'})
         break
     }
@@ -359,19 +345,15 @@ function AppInner({cycleTheme}: {cycleTheme: () => void}) {
   // card/task whose text happens to appear on that same row. padX stays small so
   // a target only matches on its own text (a wide padX let one row's target
   // swallow clicks meant for another). padY covers a card's border rows.
-  // genError shows a retry hint only when retrying can actually help (not for a
-  // missing key, which needs a restart).
   const hints: Array<[string, string]> =
-    phase.name === 'genError' && phase.code !== 'NO_KEY'
-      ? [['↵', 'try again'], ...HINTS.genError]
-      : HINTS[phase.name]
+    phase.name === 'genError' ? [['↵', 'try again'], ...HINTS.genError] : HINTS[phase.name]
 
   const clickTargets: ClickTarget[] = []
   for (const [keyName, label] of hints) {
     const action = hintAction(keyName)
     if (action) clickTargets.push({match: `${keyName} ${label}`, action})
   }
-  if (phase.name === 'genError' && phase.code !== 'NO_KEY') {
+  if (phase.name === 'genError') {
     clickTargets.push({match: RETRY_LABEL, padX: 2, padY: 1, action: () => startGenerate(phase.goal)})
   }
   if (phase.name === 'list') {
@@ -512,40 +494,27 @@ function AppInner({cycleTheme}: {cycleTheme: () => void}) {
         </Box>
       )}
 
-      {phase.name === 'genError' &&
-        (() => {
-          const copy = GEN_ERROR_COPY[phase.code]
-          const canRetry = phase.code !== 'NO_KEY'
-          return (
-            <Box flexDirection="column" width={width}>
-              <Box
-                flexDirection="column"
-                width={width}
-                borderStyle="round"
-                borderColor={theme.accent}
-                borderDimColor={theme.dimMuted}
-                paddingX={2}
-                paddingY={1}
-              >
-                <Text bold color={theme.text} wrap="wrap">{copy.title}</Text>
-                <Text color={theme.muted} dimColor={theme.dimMuted} wrap="wrap">{copy.body}</Text>
-                {copy.hint ? (
-                  <>
-                    <Text> </Text>
-                    <Text color={theme.muted} dimColor={theme.dimMuted} wrap="wrap">{copy.hint}</Text>
-                  </>
-                ) : null}
-              </Box>
-              {canRetry ? (
-                <Box marginTop={1}>
-                  <Box borderStyle="round" borderColor={theme.accent} paddingX={2}>
-                    <Text bold color={theme.accent}>{RETRY_LABEL}</Text>
-                  </Box>
-                </Box>
-              ) : null}
+      {phase.name === 'genError' && (
+        <Box flexDirection="column" width={width}>
+          <Box
+            flexDirection="column"
+            width={width}
+            borderStyle="round"
+            borderColor={theme.accent}
+            borderDimColor={theme.dimMuted}
+            paddingX={2}
+            paddingY={1}
+          >
+            <Text bold color={theme.text} wrap="wrap">{GEN_ERROR.title}</Text>
+            <Text color={theme.muted} dimColor={theme.dimMuted} wrap="wrap">{GEN_ERROR.body}</Text>
+          </Box>
+          <Box marginTop={1}>
+            <Box borderStyle="round" borderColor={theme.accent} paddingX={2}>
+              <Text bold color={theme.accent}>{RETRY_LABEL}</Text>
             </Box>
-          )
-        })()}
+          </Box>
+        </Box>
+      )}
 
       {(phase.name === 'detail' || phase.name === 'addTask') &&
         openChecklist &&
