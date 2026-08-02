@@ -24,5 +24,8 @@ const cleanup = () => {
 if (isTTY) process.stdout.write(`${ESC}[?1049h${ESC}[H`)
 process.on('exit', cleanup)
 
-const {waitUntilExit} = render(<App />, {stdout: captureFrames(process.stdout)})
+// `checklist "plan a trip"` generates that goal immediately, skipping the menu.
+const initialGoal = process.argv.slice(2).join(' ').trim() || undefined
+
+const {waitUntilExit} = render(<App initialGoal={initialGoal} />, {stdout: captureFrames(process.stdout)})
 void waitUntilExit().finally(cleanup)

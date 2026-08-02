@@ -23,6 +23,21 @@ export function useColumns(): number {
 /** Width of the content area inside the page padding. */
 export const contentWidth = (cols: number) => Math.min(cols, MAX_WIDTH) - PAD_X * 2
 
+/** Terminal rows, kept live across resizes (for scroll viewports). */
+export function useRows(): number {
+  const {stdout} = useStdout()
+  const [rows, setRows] = useState(stdout?.rows ?? 24)
+  useEffect(() => {
+    if (!stdout) return
+    const onResize = () => setRows(stdout.rows ?? 24)
+    stdout.on('resize', onResize)
+    return () => {
+      stdout.off('resize', onResize)
+    }
+  }, [stdout])
+  return rows
+}
+
 /**
  * Page frame: pads the content and re-measures on terminal resize so the
  * layout stays put. Capped at 100 columns so lines don't sprawl on a wide
