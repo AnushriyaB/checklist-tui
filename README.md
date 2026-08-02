@@ -58,6 +58,3 @@ Built step by step as a learning project. Dashboard, local storage,
 create/open/add/toggle/delete, mouse support, theming, responsive layout,
 animated launch card, and AI-generated checklists from a one-line goal.
 
-## License
-
-MIT
