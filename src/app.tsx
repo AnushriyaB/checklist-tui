@@ -1,13 +1,16 @@
 import React, {useEffect, useRef, useState} from 'react'
 import {Box, Text, useApp, useInput} from 'ink'
 import {TextField} from './components/text-field'
-import {ProgressBar} from './components/progress-bar'
 import {Shortcuts, type Hint} from './components/shortcuts'
 import {Spinner} from './components/spinner'
 import {Shimmer} from './components/shimmer'
 import {Welcome} from './components/welcome'
 import {Screen, Gap, useColumns, useRows, contentWidth} from './components/screen'
+import {HelpOverlay} from './views/help'
+import {Dashboard} from './views/dashboard'
+import {DetailView} from './views/detail'
 import {generateChecklist, GenerationError, type GenErrorCode} from './lib/ai'
+import {truncate} from './lib/text'
 import {ThemeProvider, useTheme, nextThemeMode, type ThemeMode} from './theme'
 import {
   loadChecklists,
@@ -17,8 +20,9 @@ import {
   newTask,
   checklistFromAi,
   progress,
+  flatten,
+  locate,
   type Checklist,
-  type Group,
 } from './store'
 
 // The whole app is one state machine. Each phase carries exactly the data it
@@ -59,35 +63,6 @@ const RETRY_LABEL = '↵  Try again'
 // Footer keys shown muted (navigation / system), vs accent for action keys.
 const MUTED_KEYS = new Set(['↑↓', '^c'])
 
-const truncate = (s: string, n: number) => (s.length > n ? `${s.slice(0, n - 1)}…` : s)
-
-// Greedy word-wrap to a cell width, hard-breaking any single word that's too
-// long. We wrap by hand (rather than leaning on Ink) so we know exactly what
-// lands on line 1 — that's what mouse hit-testing matches against.
-function wrapText(text: string, width: number): string[] {
-  const lines: string[] = []
-  let line = ''
-  for (const word of text.split(/\s+/).filter(Boolean)) {
-    let w = word
-    while (w.length > width) {
-      if (line) {
-        lines.push(line)
-        line = ''
-      }
-      lines.push(w.slice(0, width))
-      w = w.slice(width)
-    }
-    if (!line) line = w
-    else if (line.length + 1 + w.length <= width) line += ` ${w}`
-    else {
-      lines.push(line)
-      line = w
-    }
-  }
-  if (line) lines.push(line)
-  return lines.length ? lines : ['']
-}
-
 // Goal suggestions across the perspectives the user cares about (design / eng /
 // PM), plus one everyday one. Tab in the prompt fills the current one.
 const SUGGESTIONS = [
@@ -100,72 +75,6 @@ const SUGGESTIONS = [
   'Plan a product launch for Q3',
   'Turn this project into a portfolio case study',
 ]
-
-// Shortcut reference shown by the '?' overlay. Keys use plain words (opt/ctrl)
-// rather than ⌥/⌃ glyphs to avoid width surprises in the fixed key column.
-const HELP: Array<{heading: string; rows: Array<[keys: string, desc: string]>}> = [
-  {
-    heading: 'Dashboard',
-    rows: [
-      ['↑↓ / j k', 'move between checklists'],
-      ['↵', 'open'],
-      ['g', 'generate one with AI'],
-      ['n', 'new empty list'],
-      ['d', 'delete list'],
-    ],
-  },
-  {
-    heading: 'Inside a checklist',
-    rows: [
-      ['↑↓ / j k', 'move between tasks'],
-      ['space', 'toggle done'],
-      ['e', 'edit task'],
-      ['a', 'add task'],
-      ['x', 'delete task'],
-      ['/', 'filter: all → done → to-do'],
-    ],
-  },
-  {
-    heading: 'Typing',
-    rows: [
-      ['← →', 'move by character'],
-      ['opt ← →', 'move by word'],
-      ['ctrl a/e', 'jump to line start / end'],
-      ['tab', 'use suggestion (goal prompt)'],
-    ],
-  },
-  {
-    heading: 'Anywhere',
-    rows: [
-      ['^t', 'cycle theme'],
-      ['esc', 'back / cancel'],
-      ['?', 'toggle this help'],
-      ['^c', 'quit'],
-    ],
-  },
-]
-
-// Map a global task index (the cursor) to its group and position-in-group, so
-// a new task can be inserted right where the user is. Past the end → last group.
-function locate(groups: Group[], globalIndex: number): {gi: number; ti: number} {
-  let count = 0
-  for (let g = 0; g < groups.length; g++) {
-    if (globalIndex < count + groups[g]!.tasks.length) return {gi: g, ti: globalIndex - count}
-    count += groups[g]!.tasks.length
-  }
-  const gi = Math.max(0, groups.length - 1)
-  return {gi, ti: groups[gi]?.tasks.length ?? 0}
-}
-
-// Flatten a checklist's groups into one navigable list of rows, remembering
-// where each group starts so we can print its header once.
-function flatten(checklist: Checklist) {
-  const rows: Array<{groupTitle: string; firstOfGroup: boolean; task: Checklist['groups'][number]['tasks'][number]}> = []
-  for (const group of checklist.groups) {
-    group.tasks.forEach((task, i) => rows.push({groupTitle: group.title, firstOfGroup: i === 0, task}))
-  }
-  return rows
-}
 
 export function App({initialGoal}: {initialGoal?: string}) {
   // Default to `dark` so the launch background tint is coherent; `^t` cycles to
@@ -185,10 +94,6 @@ function AppInner({cycleTheme, initialGoal}: {cycleTheme: () => void; initialGoa
   const rows = useRows() // terminal height, for the scroll viewport
   const showBar = width >= 44 // hide the progress bar when there's no room for it
   const scrollTop = useRef(0) // first visible display-line of the task viewport
-  // border(2)+padX(2)+marker(2)+checkbox(2) = 8, plus 2 cells of slack so a
-  // terminal-wide glyph (e.g. "◻" rendering 2 cells) can't overflow the row and
-  // trigger a phantom wrap — which also desynced footer mouse hit-testing.
-  const taskTextWidth = Math.max(4, width - 10)
   const [checklists, setChecklists] = useState<Checklist[]>([])
   const [phase, setPhase] = useState<Phase>(initialGoal ? {name: 'generating', goal: initialGoal} : {name: 'list'})
   const [listCursor, setListCursor] = useState(0)
@@ -232,14 +137,6 @@ function AppInner({cycleTheme, initialGoal}: {cycleTheme: () => void; initialGoa
     phase.name === 'detail' || phase.name === 'addTask' || phase.name === 'editTask'
       ? checklists.find(c => c.id === phase.id)
       : undefined
-
-  // Fixed count column (widest count wins) so every home row's bar starts at
-  // the same x — the bars line up instead of jittering per row.
-  const listCountW = Math.max(3, ...checklists.map(c => {
-    const {done, total} = progress(c)
-    return `${done}/${total}`.length
-  }))
-  const listTitleW = Math.max(4, width - 3 - (showBar ? 11 : 0) - listCountW)
 
   // Rows to show for the open checklist — '/' cycles all → done → to-do.
   const visibleRows = (cl: Checklist) => {
@@ -504,39 +401,7 @@ function AppInner({cycleTheme, initialGoal}: {cycleTheme: () => void; initialGoa
     )
   }
 
-  if (showHelp) {
-    return (
-      <Screen>
-        <Text bold color={theme.accent}>✓ checklists — shortcuts</Text>
-        <Gap />
-        <Box
-          flexDirection="column"
-          width={width}
-          borderStyle="round"
-          borderColor={theme.muted}
-          borderDimColor={theme.dimMuted}
-          paddingX={2}
-          paddingY={1}
-        >
-          {HELP.map((section, si) => (
-            <Box key={section.heading} flexDirection="column" marginTop={si === 0 ? 0 : 1}>
-              <Text bold color={theme.muted} dimColor={theme.dimMuted}>{section.heading}</Text>
-              {section.rows.map(([keys, desc]) => (
-                <Box key={keys}>
-                  <Box width={12} flexShrink={0}><Text color={theme.accent}>{keys}</Text></Box>
-                  <Box flexGrow={1} flexShrink={1} minWidth={0}>
-                    <Text color={theme.text}>{desc}</Text>
-                  </Box>
-                </Box>
-              ))}
-            </Box>
-          ))}
-        </Box>
-        <Gap />
-        <Shortcuts items={[['?', 'close', false], ['esc', 'close', false]]} />
-      </Screen>
-    )
-  }
+  if (showHelp) return <HelpOverlay />
 
   return (
     <Screen>
@@ -551,50 +416,9 @@ function AppInner({cycleTheme, initialGoal}: {cycleTheme: () => void; initialGoa
 
       <Gap />
 
-      {phase.name === 'list' &&
-        (checklists.length === 0 ? (
-          <Box flexDirection="column">
-            <Text color={theme.muted} dimColor={theme.dimMuted}>No checklists yet.</Text>
-            <Text color={theme.muted} dimColor={theme.dimMuted}>
-              Press <Text color={theme.accent} bold>g</Text> to generate one with AI, or{' '}
-              <Text color={theme.accent} bold>n</Text> to add one yourself.
-            </Text>
-          </Box>
-        ) : (
-          <Box flexDirection="column">
-            {checklists.map((c, i) => {
-              const {done, total} = progress(c)
-              const selected = i === listCursor
-              // Tight one-line rows (no border boxes). The selected row lifts with
-              // a subtle fill; the whole row is one Text so the fill is continuous
-              // (Ink 5 can't background a Box). Widths are padded by hand.
-              const bg = selected ? theme.barBg : undefined
-              const countStr = `${done}/${total}`.padStart(listCountW)
-              const barW = showBar ? 10 : 0
-              const titleW = listTitleW
-              const title = truncate(c.title, titleW).padEnd(titleW)
-              const filled = total > 0 ? Math.round((done / total) * barW) : 0
-              const complete = total > 0 && done === total
-              return (
-                <Box key={c.id} width={width}>
-                  <Text backgroundColor={bg} wrap="truncate-end">
-                    <Text backgroundColor={bg} color={theme.accent} bold>{selected ? '❯ ' : '  '}</Text>
-                    <Text backgroundColor={bg} color={theme.text} bold={selected}>{title}</Text>
-                    <Text backgroundColor={bg}> </Text>
-                    {showBar ? (
-                      <Text>
-                        <Text backgroundColor={bg} color={complete ? theme.accent : theme.text}>{'█'.repeat(filled)}</Text>
-                        <Text backgroundColor={bg} color={theme.muted} dimColor={theme.dimMuted}>{'░'.repeat(barW - filled)}</Text>
-                        <Text backgroundColor={bg}> </Text>
-                      </Text>
-                    ) : null}
-                    <Text backgroundColor={bg} color={theme.muted} dimColor={theme.dimMuted}>{countStr}</Text>
-                  </Text>
-                </Box>
-              )
-            })}
-          </Box>
-        ))}
+      {phase.name === 'list' && (
+        <Dashboard checklists={checklists} listCursor={listCursor} width={width} showBar={showBar} />
+      )}
 
       {phase.name === 'new' && (
         <Box flexDirection="column">
@@ -672,187 +496,24 @@ function AppInner({cycleTheme, initialGoal}: {cycleTheme: () => void; initialGoa
         </Box>
       )}
 
-      {(phase.name === 'detail' || phase.name === 'addTask' || phase.name === 'editTask') &&
-        openChecklist &&
-        (() => {
-          const {done, total} = progress(openChecklist)
-          const allDone = total > 0 && done === total && taskFilter === 'all'
-          const taskRows = visibleRows(openChecklist) // filtered by '/' (all/done/to-do)
-          const showGroupHeaders = openChecklist.groups.length > 1
-
-          // Build a flat list of display lines (phase headers, wrapped task
-          // lines, spacers, and the add-task input) so a viewport can scroll
-          // over them — the alt-screen terminal can't scroll itself. Each line
-          // remembers which task it belongs to so scrolling can follow the cursor.
-          type DLine = {taskIndex: number; node: React.ReactNode}
-          const dlines: DLine[] = []
-          const focusTask = Math.min(taskCursor, taskRows.length - 1) // where 'a' inserts
-          const inputNode = (
-            <Box>
-              <Box width={2} flexShrink={0}><Text> </Text></Box>
-              <Text color={theme.accent}>+ </Text>
-              <Box flexGrow={1} flexShrink={1} minWidth={0}>
-                <TextField value={draft} onChange={setDraft} onSubmit={submitTask} placeholder="add a task…" />
-              </Box>
-            </Box>
-          )
-          taskRows.forEach((r, i) => {
-            const selected = phase.name === 'detail' && i === taskCursor
-            // First VISIBLE task of its group (recomputed so headers stay correct
-            // when '/' search hides some tasks).
-            const firstOfGroup = i === 0 || taskRows[i - 1]!.groupTitle !== r.groupTitle
-            if (firstOfGroup && showGroupHeaders) {
-              if (dlines.length) dlines.push({taskIndex: -1, node: <Text> </Text>})
-              dlines.push({
-                taskIndex: -1,
-                node: <Text bold color={theme.muted} dimColor={theme.dimMuted}>{r.groupTitle}</Text>,
-              })
-            }
-            const editing = phase.name === 'editTask' && r.task.id === phase.taskId
-            if (editing) {
-              // Replace this task's lines with an inline editor prefilled with its text.
-              dlines.push({
-                taskIndex: i,
-                node: (
-                  <Box>
-                    <Box width={2} flexShrink={0}><Text color={theme.accent}>❯ </Text></Box>
-                    <Box flexGrow={1} flexShrink={1} minWidth={0}>
-                      <TextField value={draft} onChange={setDraft} onSubmit={submitEdit} />
-                    </Box>
-                  </Box>
-                ),
-              })
-              return
-            }
-            wrapText(r.task.text, taskTextWidth).forEach((line, li) => {
-              // One Text per line so Ink measures the whole row (glyphs included)
-              // and never sub-wraps it. Marker + checkbox = a 4-cell prefix;
-              // continuation lines indent by the same 4 cells.
-              dlines.push({
-                taskIndex: i,
-                node: (
-                  <Text>
-                    <Text color={theme.accent}>{li === 0 && selected ? '❯ ' : '  '}</Text>
-                    <Text color={r.task.done ? theme.accent : theme.muted} dimColor={!r.task.done && theme.dimMuted}>
-                      {li === 0 ? (r.task.done ? '✓ ' : '◻ ') : '  '}
-                    </Text>
-                    <Text color={r.task.done ? theme.muted : theme.text} dimColor={r.task.done && theme.dimMuted}>
-                      {line}
-                    </Text>
-                  </Text>
-                ),
-              })
-            })
-            // The add-task input appears right below the task you're on.
-            if (phase.name === 'addTask' && i === focusTask) {
-              dlines.push({taskIndex: -2, node: inputNode})
-            }
-          })
-          if (phase.name === 'addTask' && taskRows.length === 0) {
-            dlines.push({taskIndex: -2, node: inputNode})
-          }
-
-          const isEmpty = taskRows.length === 0 && phase.name !== 'addTask'
-          // Interior height available for the panel; reserve 2 lines for the
-          // ↑/↓ indicators when scrolling so the panel height stays constant.
-          const viewportH = Math.max(4, rows - 11)
-          const totalLines = dlines.length
-          const scrolls = totalLines > viewportH
-          const contentH = scrolls ? viewportH - 2 : totalLines
-
-          let offset = scrollTop.current
-          if (scrolls) {
-            // Follow the cursor's task, or the input line while adding.
-            const focusIndex = phase.name === 'addTask' ? -2 : taskCursor
-            const firstSel = dlines.findIndex(d => d.taskIndex === focusIndex)
-            if (firstSel >= 0) {
-              let lastSel = firstSel
-              while (lastSel + 1 < totalLines && dlines[lastSel + 1]!.taskIndex === focusIndex) lastSel++
-              if (firstSel < offset) offset = firstSel
-              else if (lastSel > offset + contentH - 1) offset = lastSel - contentH + 1
-            }
-            offset = Math.max(0, Math.min(offset, totalLines - contentH))
-          } else {
-            offset = 0
-          }
-          scrollTop.current = offset
-
-          const visible = dlines.slice(offset, offset + contentH)
-          const hasAbove = scrolls && offset > 0
-          const hasBelow = scrolls && offset + contentH < totalLines
-          // Keep phase context when scrolled: the "↑ more" line names the phase
-          // the first visible task belongs to (its header may be scrolled off).
-          const firstVisibleTask = visible.find(d => d.taskIndex >= 0)
-          const topPhase =
-            showGroupHeaders && firstVisibleTask ? taskRows[firstVisibleTask.taskIndex]?.groupTitle : undefined
-
-          return (
-            <Box flexDirection="column" width={width}>
-              <Box width={width}>
-                <Box flexGrow={1} flexShrink={1} minWidth={0} marginRight={1}>
-                  <Text bold color={theme.text} wrap="truncate-end">{openChecklist.title}</Text>
-                </Box>
-                <Box flexShrink={0}>
-                  {showBar ? <ProgressBar done={done} total={total} /> : null}
-                  <Text color={theme.muted} dimColor={theme.dimMuted}>{` ${done}/${total}`}</Text>
-                </Box>
-              </Box>
-
-              {taskFilter !== 'all' ? (
-                <Box marginTop={1}>
-                  <Text backgroundColor={theme.barBg} color={theme.muted} dimColor={theme.dimMuted}>
-                    {taskFilter === 'done' ? ' showing done ' : ' showing to-do '}
-                  </Text>
-                  <Text color={theme.muted} dimColor={theme.dimMuted}>  / cycles · esc clears</Text>
-                </Box>
-              ) : null}
-
-              {allDone ? (
-                <Box marginTop={1}>
-                  {celebrating ? (
-                    <Shimmer text="✓  All done — nice work!" />
-                  ) : (
-                    <Text bold color={theme.accent}>✓  All done!</Text>
-                  )}
-                </Box>
-              ) : null}
-              <Gap />
-
-              <Box
-                flexDirection="column"
-                width={width}
-                borderStyle="round"
-                borderColor={theme.muted}
-                borderDimColor={theme.dimMuted}
-                paddingX={1}
-              >
-                {isEmpty ? (
-                  taskFilter !== 'all' ? (
-                    <Text color={theme.muted} dimColor={theme.dimMuted}>Nothing {taskFilter === 'done' ? 'completed' : 'left to do'} here.</Text>
-                  ) : (
-                    <Text color={theme.muted} dimColor={theme.dimMuted}>
-                      No tasks yet. Press <Text color={theme.accent} bold>a</Text> to add one.
-                    </Text>
-                  )
-                ) : (
-                  <>
-                    {scrolls ? (
-                      <Text color={theme.muted} dimColor={theme.dimMuted}>
-                        {hasAbove ? `  ↑  ${topPhase ?? 'more above'}` : ' '}
-                      </Text>
-                    ) : null}
-                    {visible.map((d, idx) => (
-                      <Box key={offset + idx}>{d.node}</Box>
-                    ))}
-                    {scrolls ? (
-                      <Text color={theme.muted} dimColor={theme.dimMuted}>{hasBelow ? '  ↓ more below' : ' '}</Text>
-                    ) : null}
-                  </>
-                )}
-              </Box>
-            </Box>
-          )
-        })()}
+      {(phase.name === 'detail' || phase.name === 'addTask' || phase.name === 'editTask') && openChecklist && (
+        <DetailView
+          checklist={openChecklist}
+          mode={phase.name}
+          editTaskId={phase.name === 'editTask' ? phase.taskId : undefined}
+          taskCursor={taskCursor}
+          taskFilter={taskFilter}
+          celebrating={celebrating}
+          draft={draft}
+          onDraft={setDraft}
+          onSubmitTask={submitTask}
+          onSubmitEdit={submitEdit}
+          width={width}
+          rows={rows}
+          showBar={showBar}
+          scrollTop={scrollTop}
+        />
+      )}
 
       {phase.name === 'confirmDelete' &&
         (() => {

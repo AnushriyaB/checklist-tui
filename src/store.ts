@@ -66,3 +66,28 @@ export function progress(checklist: Checklist): {done: number; total: number} {
   const tasks = checklist.groups.flatMap(group => group.tasks)
   return {done: tasks.filter(task => task.done).length, total: tasks.length}
 }
+
+export type TaskRow = {groupTitle: string; firstOfGroup: boolean; task: Task}
+
+/** Flatten groups into one navigable list of rows, tagging each group's first task. */
+export function flatten(checklist: Checklist): TaskRow[] {
+  const rows: TaskRow[] = []
+  for (const group of checklist.groups) {
+    group.tasks.forEach((task, i) => rows.push({groupTitle: group.title, firstOfGroup: i === 0, task}))
+  }
+  return rows
+}
+
+/**
+ * Map a global task index (the cursor) to its group and position-in-group, so a
+ * new task can be inserted right where the user is. Past the end → last group.
+ */
+export function locate(groups: Group[], globalIndex: number): {gi: number; ti: number} {
+  let count = 0
+  for (let g = 0; g < groups.length; g++) {
+    if (globalIndex < count + groups[g]!.tasks.length) return {gi: g, ti: globalIndex - count}
+    count += groups[g]!.tasks.length
+  }
+  const gi = Math.max(0, groups.length - 1)
+  return {gi, ti: groups[gi]?.tasks.length ?? 0}
+}
