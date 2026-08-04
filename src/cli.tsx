@@ -11,7 +11,17 @@ const isTTY = Boolean(process.stdout.isTTY)
 
 if (isTTY) {
   process.stdout.write(`${ESC}[?1049h${ESC}[2J${ESC}[H`) // enter alt screen, clear, home
-  process.stdout.on('resize', () => process.stdout.write(`${ESC}[2J${ESC}[H`))
+  // Only clear when the character grid actually changed. Terminals also fire
+  // 'resize' on no-op events (focus, sub-cell drags); clearing on those wiped
+  // the screen while Ink — seeing identical content — didn't redraw → blank.
+  let lastCols = process.stdout.columns
+  let lastRows = process.stdout.rows
+  process.stdout.on('resize', () => {
+    if (process.stdout.columns === lastCols && process.stdout.rows === lastRows) return
+    lastCols = process.stdout.columns
+    lastRows = process.stdout.rows
+    process.stdout.write(`${ESC}[2J${ESC}[H`)
+  })
 }
 
 let cleaned = false
