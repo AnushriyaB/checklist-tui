@@ -2,13 +2,11 @@ import React, {useEffect, useRef, useState} from 'react'
 import {Box, Text, useApp, useInput} from 'ink'
 import {TextField} from './components/text-field'
 import {ProgressBar} from './components/progress-bar'
-import {Shortcuts} from './components/shortcuts'
+import {Shortcuts, type Hint} from './components/shortcuts'
 import {Spinner} from './components/spinner'
 import {Shimmer} from './components/shimmer'
 import {Welcome} from './components/welcome'
 import {Screen, Gap, useColumns, useRows, contentWidth} from './components/screen'
-import {clickTargetAt, type ClickTarget} from './lib/click-map'
-import {useMouseClick} from './lib/use-mouse-click'
 import {generateChecklist, GenerationError, type GenErrorCode} from './lib/ai'
 import {ThemeProvider, useTheme, nextThemeMode, type ThemeMode} from './theme'
 import {
@@ -39,9 +37,9 @@ type Phase =
 // Each phase declares its own keyboard hints — the row shown at the bottom.
 // (genError's hints are built dynamically — retry only makes sense for failures.)
 const HINTS: Record<Phase['name'], Array<[string, string]>> = {
-  list: [['↑↓', 'move'], ['↵', 'open'], ['g', 'generate'], ['n', 'new'], ['d', 'delete'], ['^t', 'theme'], ['^c', 'quit']],
+  list: [['↑↓', 'move'], ['↵', 'open'], ['g', 'generate'], ['n', 'new'], ['d', 'delete'], ['?', 'help'], ['^t', 'theme'], ['^c', 'quit']],
   new: [['↵', 'create'], ['esc', 'cancel']],
-  detail: [['↑↓', 'move'], ['space', 'toggle'], ['e', 'edit'], ['a', 'add'], ['x', 'delete'], ['esc', 'back'], ['^c', 'quit']],
+  detail: [['↑↓', 'move'], ['space', 'toggle'], ['e', 'edit'], ['a', 'add'], ['x', 'delete'], ['/', 'filter'], ['?', 'help'], ['esc', 'back']],
   addTask: [['↵', 'add'], ['esc', 'done']],
   editTask: [['↵', 'save'], ['esc', 'cancel']],
   confirmDelete: [['y', 'delete'], ['n', 'keep']],
@@ -58,6 +56,8 @@ const GEN_ERROR = {
   body: 'Something went wrong this time. Give it another try, or head back and add one yourself.',
 }
 const RETRY_LABEL = '↵  Try again'
+// Footer keys shown muted (navigation / system), vs accent for action keys.
+const MUTED_KEYS = new Set(['↑↓', '^c'])
 
 const truncate = (s: string, n: number) => (s.length > n ? `${s.slice(0, n - 1)}…` : s)
 
@@ -101,6 +101,50 @@ const SUGGESTIONS = [
   'Turn this project into a portfolio case study',
 ]
 
+// Shortcut reference shown by the '?' overlay. Keys use plain words (opt/ctrl)
+// rather than ⌥/⌃ glyphs to avoid width surprises in the fixed key column.
+const HELP: Array<{heading: string; rows: Array<[keys: string, desc: string]>}> = [
+  {
+    heading: 'Dashboard',
+    rows: [
+      ['↑↓ / j k', 'move between checklists'],
+      ['↵', 'open'],
+      ['g', 'generate one with AI'],
+      ['n', 'new empty list'],
+      ['d', 'delete list'],
+    ],
+  },
+  {
+    heading: 'Inside a checklist',
+    rows: [
+      ['↑↓ / j k', 'move between tasks'],
+      ['space', 'toggle done'],
+      ['e', 'edit task'],
+      ['a', 'add task'],
+      ['x', 'delete task'],
+      ['/', 'filter: all → done → to-do'],
+    ],
+  },
+  {
+    heading: 'Typing',
+    rows: [
+      ['← →', 'move by character'],
+      ['opt ← →', 'move by word'],
+      ['ctrl a/e', 'jump to line start / end'],
+      ['tab', 'use suggestion (goal prompt)'],
+    ],
+  },
+  {
+    heading: 'Anywhere',
+    rows: [
+      ['^t', 'cycle theme'],
+      ['esc', 'back / cancel'],
+      ['?', 'toggle this help'],
+      ['^c', 'quit'],
+    ],
+  },
+]
+
 // Map a global task index (the cursor) to its group and position-in-group, so
 // a new task can be inserted right where the user is. Past the end → last group.
 function locate(groups: Group[], globalIndex: number): {gi: number; ti: number} {
@@ -141,10 +185,6 @@ function AppInner({cycleTheme, initialGoal}: {cycleTheme: () => void; initialGoa
   const rows = useRows() // terminal height, for the scroll viewport
   const showBar = width >= 44 // hide the progress bar when there's no room for it
   const scrollTop = useRef(0) // first visible display-line of the task viewport
-  // Exact widths of the truncated text, so the CLICK match string equals what's
-  // actually on screen (otherwise hit-testing can't find it). Fixed chrome:
-  // card = border(2)+padX(2)+marker(2)+gap(1)+count(6)+bar(10 when shown).
-  const cardTitleWidth = Math.max(4, width - (showBar ? 23 : 13))
   // border(2)+padX(2)+marker(2)+checkbox(2) = 8, plus 2 cells of slack so a
   // terminal-wide glyph (e.g. "◻" rendering 2 cells) can't overflow the row and
   // trigger a phantom wrap — which also desynced footer mouse hit-testing.
@@ -156,6 +196,8 @@ function AppInner({cycleTheme, initialGoal}: {cycleTheme: () => void; initialGoa
   const [draft, setDraft] = useState('') // shared value for the text inputs
   const [suggestionIndex, setSuggestionIndex] = useState(0) // which goal suggestion Tab fills
   const [celebrating, setCelebrating] = useState(false) // brief burst when a list hits 100%
+  const [taskFilter, setTaskFilter] = useState<'all' | 'done' | 'todo'>('all') // '/' cycles this
+  const [showHelp, setShowHelp] = useState(false) // '?' overlay
   const genAbort = useRef<AbortController | undefined>(undefined) // cancels an in-flight generation
 
   // Load once on startup.
@@ -190,6 +232,22 @@ function AppInner({cycleTheme, initialGoal}: {cycleTheme: () => void; initialGoa
     phase.name === 'detail' || phase.name === 'addTask' || phase.name === 'editTask'
       ? checklists.find(c => c.id === phase.id)
       : undefined
+
+  // Fixed count column (widest count wins) so every home row's bar starts at
+  // the same x — the bars line up instead of jittering per row.
+  const listCountW = Math.max(3, ...checklists.map(c => {
+    const {done, total} = progress(c)
+    return `${done}/${total}`.length
+  }))
+  const listTitleW = Math.max(4, width - 3 - (showBar ? 11 : 0) - listCountW)
+
+  // Rows to show for the open checklist — '/' cycles all → done → to-do.
+  const visibleRows = (cl: Checklist) => {
+    const all = flatten(cl)
+    if (taskFilter === 'done') return all.filter(r => r.task.done)
+    if (taskFilter === 'todo') return all.filter(r => !r.task.done)
+    return all
+  }
 
   // --- Actions --------------------------------------------------------------
   const submitNew = (value: string) => {
@@ -308,6 +366,16 @@ function AppInner({cycleTheme, initialGoal}: {cycleTheme: () => void; initialGoa
     if (key.ctrl && input === 'c') return exit()
     if (key.ctrl && input === 't') return cycleTheme()
 
+    // Help overlay swallows everything but its own close keys.
+    if (showHelp) {
+      if (input === '?' || key.escape) setShowHelp(false)
+      return
+    }
+    if (input === '?' && (phase.name === 'list' || phase.name === 'detail')) {
+      setShowHelp(true)
+      return
+    }
+
     // Text-entry phases: the field handles typing; we only catch esc.
     if (phase.name === 'new' || phase.name === 'addTask') {
       if (key.escape) {
@@ -362,10 +430,11 @@ function AppInner({cycleTheme, initialGoal}: {cycleTheme: () => void; initialGoa
     }
 
     if (phase.name === 'list') {
-      if (key.upArrow) setListCursor(c => Math.max(0, c - 1))
-      if (key.downArrow) setListCursor(c => Math.min(checklists.length - 1, c + 1))
+      if (key.upArrow || input === 'k') setListCursor(c => Math.max(0, c - 1))
+      if (key.downArrow || input === 'j') setListCursor(c => Math.min(checklists.length - 1, c + 1))
       const current = checklists[listCursor]
       if (key.return && current) {
+        setTaskFilter('all')
         setTaskCursor(0)
         setPhase({name: 'detail', id: current.id})
       }
@@ -382,9 +451,15 @@ function AppInner({cycleTheme, initialGoal}: {cycleTheme: () => void; initialGoa
     }
 
     if (phase.name === 'detail' && openChecklist) {
-      const rows = flatten(openChecklist)
-      if (key.upArrow) setTaskCursor(c => Math.max(0, c - 1))
-      if (key.downArrow) setTaskCursor(c => Math.min(Math.max(0, rows.length - 1), c + 1))
+      const rows = visibleRows(openChecklist)
+      if (key.upArrow || input === 'k') setTaskCursor(c => Math.max(0, c - 1))
+      if (key.downArrow || input === 'j') setTaskCursor(c => Math.min(Math.max(0, rows.length - 1), c + 1))
+      if (input === '/') {
+        // cycle the filter: all → done → to-do → all
+        setTaskFilter(f => (f === 'all' ? 'done' : f === 'done' ? 'todo' : 'all'))
+        setTaskCursor(0)
+        return
+      }
       if (input === ' ') {
         const row = rows[taskCursor]
         if (row) toggleTask(openChecklist.id, row.task.id)
@@ -404,153 +479,19 @@ function AppInner({cycleTheme, initialGoal}: {cycleTheme: () => void; initialGoa
         const row = rows[taskCursor]
         if (row) deleteTask(openChecklist.id, row.task.id)
       }
-      if (key.escape) setPhase({name: 'list'})
+      if (key.escape) {
+        if (taskFilter !== 'all') setTaskFilter('all') // clear the filter first
+        else setPhase({name: 'list'})
+      }
       return
     }
   }, {isActive: Boolean(process.stdin.isTTY)}) // no raw-mode crash when piped / non-TTY
 
-  // --- Mouse ----------------------------------------------------------------
-  // Anything a mouse user would expect to press is clickable. Targets are found
-  // by their visible text in the last rendered frame (see lib/click-map.ts), so
-  // there is no layout math to keep in sync. The action for a footer hint is
-  // whatever pressing that key would do in the current phase.
-  const hintAction = (keyName: string): (() => void) | undefined => {
-    // ^c (quit) is deliberately NOT clickable: a click that tears down the app
-    // leaks the mouse-release event to the shell. Quit stays keyboard-only.
-    if (keyName === '^t') return cycleTheme
-    switch (phase.name) {
-      case 'list': {
-        const current = checklists[listCursor]
-        if (keyName === '↵' && current) return () => {
-          setTaskCursor(0)
-          setPhase({name: 'detail', id: current.id})
-        }
-        if (keyName === 'g') return () => {
-          setDraft('')
-          setPhase({name: 'prompt'})
-        }
-        if (keyName === 'n') return () => {
-          setDraft('')
-          setPhase({name: 'new'})
-        }
-        if (keyName === 'd' && current) return () => setPhase({name: 'confirmDelete', id: current.id})
-        break
-      }
-      case 'detail': {
-        if (!openChecklist) break
-        if (keyName === 'space') {
-          const row = flatten(openChecklist)[taskCursor]
-          if (row) return () => toggleTask(openChecklist.id, row.task.id)
-        }
-        if (keyName === 'a') return () => {
-          setDraft('')
-          setPhase({name: 'addTask', id: openChecklist.id})
-        }
-        if (keyName === 'e') {
-          const row = flatten(openChecklist)[taskCursor]
-          if (row) return () => {
-            setDraft(row.task.text)
-            setPhase({name: 'editTask', id: openChecklist.id, taskId: row.task.id})
-          }
-        }
-        if (keyName === 'x') {
-          const row = flatten(openChecklist)[taskCursor]
-          if (row) return () => deleteTask(openChecklist.id, row.task.id)
-        }
-        if (keyName === 'esc') return () => setPhase({name: 'list'})
-        break
-      }
-      case 'new':
-        if (keyName === '↵') return () => submitNew(draft)
-        if (keyName === 'esc') return () => {
-          setDraft('')
-          setPhase({name: 'list'})
-        }
-        break
-      case 'addTask':
-        if (keyName === '↵') return () => submitTask(draft)
-        if (keyName === 'esc') return () => {
-          setDraft('')
-          setPhase({name: 'detail', id: phase.id})
-        }
-        break
-      case 'editTask':
-        if (keyName === '↵') return () => submitEdit(draft)
-        if (keyName === 'esc') return () => {
-          setDraft('')
-          setPhase({name: 'detail', id: phase.id})
-        }
-        break
-      case 'confirmDelete':
-        if (keyName === 'y') return () => {
-          const next = checklists.filter(c => c.id !== phase.id)
-          persist(next)
-          setListCursor(c => Math.max(0, Math.min(c, next.length - 1)))
-          setPhase({name: 'list'})
-        }
-        if (keyName === 'n') return () => setPhase({name: 'list'})
-        break
-      case 'prompt':
-        if (keyName === '↵') return () => {
-          const goal = draft.trim()
-          if (goal) startGenerate(goal)
-        }
-        if (keyName === 'esc') return () => {
-          setDraft('')
-          setPhase({name: 'list'})
-        }
-        break
-      case 'generating':
-        if (keyName === 'esc') return cancelGenerate
-        break
-      case 'genError':
-        if (keyName === '↵') return () => startGenerate(phase.goal)
-        if (keyName === 'esc') return () => setPhase({name: 'list'})
-        break
-    }
-    return undefined
-  }
-
-  // Match strings must equal the truncated text actually rendered. Footer hints
-  // go FIRST so a click on the hint bar always resolves to the hint — never to a
-  // card/task whose text happens to appear on that same row. padX stays small so
-  // a target only matches on its own text (a wide padX let one row's target
-  // swallow clicks meant for another). padY covers a card's border rows.
+  // --- Footer hints ---------------------------------------------------------
   const hints: Array<[string, string]> =
     phase.name === 'genError' ? [['↵', 'try again'], ...HINTS.genError] : HINTS[phase.name]
-
-  const clickTargets: ClickTarget[] = []
-  for (const [keyName, label] of hints) {
-    const action = hintAction(keyName)
-    if (action) clickTargets.push({match: `${keyName} ${label}`, action})
-  }
-  if (phase.name === 'genError') {
-    clickTargets.push({match: RETRY_LABEL, padX: 2, padY: 1, action: () => startGenerate(phase.goal)})
-  }
-  if (phase.name === 'list') {
-    checklists.forEach((c, i) =>
-      clickTargets.push({
-        match: truncate(c.title, cardTitleWidth),
-        padY: 1,
-        action: () => {
-          setListCursor(i)
-          setTaskCursor(0)
-          setPhase({name: 'detail', id: c.id})
-        },
-      }),
-    )
-  }
-  if ((phase.name === 'detail' || phase.name === 'addTask') && openChecklist) {
-    for (const row of flatten(openChecklist)) {
-      // Match the first wrapped line — that's the row carrying the checkbox.
-      clickTargets.push({
-        match: wrapText(row.task.text, taskTextWidth)[0]!,
-        action: () => toggleTask(openChecklist.id, row.task.id),
-      })
-    }
-  }
-
-  useMouseClick((x, y) => clickTargetAt(x, y, clickTargets)?.action(), Boolean(process.stdin.isTTY))
+  // Navigation/system keys read muted; the action keys get the accent.
+  const footerHints: Hint[] = hints.map(([k, l]) => [k, l, !MUTED_KEYS.has(k)])
 
   // --- Render ---------------------------------------------------------------
   // Below this the fixed-width pieces (borders, padding, progress bar) can't
@@ -559,6 +500,40 @@ function AppInner({cycleTheme, initialGoal}: {cycleTheme: () => void; initialGoa
     return (
       <Screen>
         <Text color={theme.muted} dimColor={theme.dimMuted}>Make the terminal a little wider ↔</Text>
+      </Screen>
+    )
+  }
+
+  if (showHelp) {
+    return (
+      <Screen>
+        <Text bold color={theme.accent}>✓ checklists — shortcuts</Text>
+        <Gap />
+        <Box
+          flexDirection="column"
+          width={width}
+          borderStyle="round"
+          borderColor={theme.muted}
+          borderDimColor={theme.dimMuted}
+          paddingX={2}
+          paddingY={1}
+        >
+          {HELP.map((section, si) => (
+            <Box key={section.heading} flexDirection="column" marginTop={si === 0 ? 0 : 1}>
+              <Text bold color={theme.muted} dimColor={theme.dimMuted}>{section.heading}</Text>
+              {section.rows.map(([keys, desc]) => (
+                <Box key={keys}>
+                  <Box width={12} flexShrink={0}><Text color={theme.accent}>{keys}</Text></Box>
+                  <Box flexGrow={1} flexShrink={1} minWidth={0}>
+                    <Text color={theme.text}>{desc}</Text>
+                  </Box>
+                </Box>
+              ))}
+            </Box>
+          ))}
+        </Box>
+        <Gap />
+        <Shortcuts items={[['?', 'close', false], ['esc', 'close', false]]} />
       </Screen>
     )
   }
@@ -590,29 +565,31 @@ function AppInner({cycleTheme, initialGoal}: {cycleTheme: () => void; initialGoa
             {checklists.map((c, i) => {
               const {done, total} = progress(c)
               const selected = i === listCursor
-              // Each checklist is its own card. The selected one lifts with an
-              // accent border; the rest sit back with a dim muted border.
+              // Tight one-line rows (no border boxes). The selected row lifts with
+              // a subtle fill; the whole row is one Text so the fill is continuous
+              // (Ink 5 can't background a Box). Widths are padded by hand.
+              const bg = selected ? theme.barBg : undefined
+              const countStr = `${done}/${total}`.padStart(listCountW)
+              const barW = showBar ? 10 : 0
+              const titleW = listTitleW
+              const title = truncate(c.title, titleW).padEnd(titleW)
+              const filled = total > 0 ? Math.round((done / total) * barW) : 0
+              const complete = total > 0 && done === total
               return (
-                <Box
-                  key={c.id}
-                  width={width}
-                  borderStyle="round"
-                  borderColor={selected ? theme.accent : theme.muted}
-                  borderDimColor={!selected && theme.dimMuted}
-                  paddingX={1}
-                >
-                  <Box width={2} flexShrink={0}>
-                    <Text color={theme.accent}>{selected ? '❯' : ' '}</Text>
-                  </Box>
-                  {/* flexShrink + minWidth=0 so the title truncates instead of
-                      wrapping (which would break the card's single-row layout). */}
-                  <Box flexGrow={1} flexShrink={1} minWidth={0} marginRight={1}>
-                    <Text bold={selected} color={theme.text} wrap="truncate-end">{truncate(c.title, cardTitleWidth)}</Text>
-                  </Box>
-                  {showBar ? <ProgressBar done={done} total={total} /> : null}
-                  <Box width={6} flexShrink={0} justifyContent="flex-end">
-                    <Text color={theme.muted} dimColor={theme.dimMuted}>{`${done}/${total}`}</Text>
-                  </Box>
+                <Box key={c.id} width={width}>
+                  <Text backgroundColor={bg} wrap="truncate-end">
+                    <Text backgroundColor={bg} color={theme.accent} bold>{selected ? '❯ ' : '  '}</Text>
+                    <Text backgroundColor={bg} color={theme.text} bold={selected}>{title}</Text>
+                    <Text backgroundColor={bg}> </Text>
+                    {showBar ? (
+                      <Text>
+                        <Text backgroundColor={bg} color={complete ? theme.accent : theme.text}>{'█'.repeat(filled)}</Text>
+                        <Text backgroundColor={bg} color={theme.muted} dimColor={theme.dimMuted}>{'░'.repeat(barW - filled)}</Text>
+                        <Text backgroundColor={bg}> </Text>
+                      </Text>
+                    ) : null}
+                    <Text backgroundColor={bg} color={theme.muted} dimColor={theme.dimMuted}>{countStr}</Text>
+                  </Text>
                 </Box>
               )
             })}
@@ -699,8 +676,8 @@ function AppInner({cycleTheme, initialGoal}: {cycleTheme: () => void; initialGoa
         openChecklist &&
         (() => {
           const {done, total} = progress(openChecklist)
-          const allDone = total > 0 && done === total
-          const taskRows = flatten(openChecklist)
+          const allDone = total > 0 && done === total && taskFilter === 'all'
+          const taskRows = visibleRows(openChecklist) // filtered by '/' (all/done/to-do)
           const showGroupHeaders = openChecklist.groups.length > 1
 
           // Build a flat list of display lines (phase headers, wrapped task
@@ -721,7 +698,10 @@ function AppInner({cycleTheme, initialGoal}: {cycleTheme: () => void; initialGoa
           )
           taskRows.forEach((r, i) => {
             const selected = phase.name === 'detail' && i === taskCursor
-            if (r.firstOfGroup && showGroupHeaders) {
+            // First VISIBLE task of its group (recomputed so headers stay correct
+            // when '/' search hides some tasks).
+            const firstOfGroup = i === 0 || taskRows[i - 1]!.groupTitle !== r.groupTitle
+            if (firstOfGroup && showGroupHeaders) {
               if (dlines.length) dlines.push({taskIndex: -1, node: <Text> </Text>})
               dlines.push({
                 taskIndex: -1,
@@ -756,7 +736,7 @@ function AppInner({cycleTheme, initialGoal}: {cycleTheme: () => void; initialGoa
                     <Text color={r.task.done ? theme.accent : theme.muted} dimColor={!r.task.done && theme.dimMuted}>
                       {li === 0 ? (r.task.done ? '✓ ' : '◻ ') : '  '}
                     </Text>
-                    <Text color={r.task.done ? theme.muted : theme.text} dimColor={r.task.done && theme.dimMuted} strikethrough={r.task.done}>
+                    <Text color={r.task.done ? theme.muted : theme.text} dimColor={r.task.done && theme.dimMuted}>
                       {line}
                     </Text>
                   </Text>
@@ -800,6 +780,11 @@ function AppInner({cycleTheme, initialGoal}: {cycleTheme: () => void; initialGoa
           const visible = dlines.slice(offset, offset + contentH)
           const hasAbove = scrolls && offset > 0
           const hasBelow = scrolls && offset + contentH < totalLines
+          // Keep phase context when scrolled: the "↑ more" line names the phase
+          // the first visible task belongs to (its header may be scrolled off).
+          const firstVisibleTask = visible.find(d => d.taskIndex >= 0)
+          const topPhase =
+            showGroupHeaders && firstVisibleTask ? taskRows[firstVisibleTask.taskIndex]?.groupTitle : undefined
 
           return (
             <Box flexDirection="column" width={width}>
@@ -812,6 +797,15 @@ function AppInner({cycleTheme, initialGoal}: {cycleTheme: () => void; initialGoa
                   <Text color={theme.muted} dimColor={theme.dimMuted}>{` ${done}/${total}`}</Text>
                 </Box>
               </Box>
+
+              {taskFilter !== 'all' ? (
+                <Box marginTop={1}>
+                  <Text backgroundColor={theme.barBg} color={theme.muted} dimColor={theme.dimMuted}>
+                    {taskFilter === 'done' ? ' showing done ' : ' showing to-do '}
+                  </Text>
+                  <Text color={theme.muted} dimColor={theme.dimMuted}>  / cycles · esc clears</Text>
+                </Box>
+              ) : null}
 
               {allDone ? (
                 <Box marginTop={1}>
@@ -833,13 +827,19 @@ function AppInner({cycleTheme, initialGoal}: {cycleTheme: () => void; initialGoa
                 paddingX={1}
               >
                 {isEmpty ? (
-                  <Text color={theme.muted} dimColor={theme.dimMuted}>
-                    No tasks yet. Press <Text color={theme.accent} bold>a</Text> to add one.
-                  </Text>
+                  taskFilter !== 'all' ? (
+                    <Text color={theme.muted} dimColor={theme.dimMuted}>Nothing {taskFilter === 'done' ? 'completed' : 'left to do'} here.</Text>
+                  ) : (
+                    <Text color={theme.muted} dimColor={theme.dimMuted}>
+                      No tasks yet. Press <Text color={theme.accent} bold>a</Text> to add one.
+                    </Text>
+                  )
                 ) : (
                   <>
                     {scrolls ? (
-                      <Text color={theme.muted} dimColor={theme.dimMuted}>{hasAbove ? '  ↑ more above' : ' '}</Text>
+                      <Text color={theme.muted} dimColor={theme.dimMuted}>
+                        {hasAbove ? `  ↑  ${topPhase ?? 'more above'}` : ' '}
+                      </Text>
                     ) : null}
                     {visible.map((d, idx) => (
                       <Box key={offset + idx}>{d.node}</Box>
@@ -866,7 +866,7 @@ function AppInner({cycleTheme, initialGoal}: {cycleTheme: () => void; initialGoa
         })()}
 
       <Gap />
-      <Shortcuts items={hints} />
+      <Shortcuts items={footerHints} />
     </Screen>
   )
 }

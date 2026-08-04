@@ -1,7 +1,6 @@
 import React, {useEffect, useRef, useState} from 'react'
 import {Text, useInput} from 'ink'
 import {useTheme} from '../theme'
-import {stripMouseReports} from '../lib/use-mouse-click'
 
 type Props = {
   value: string
@@ -71,10 +70,9 @@ export function TextField({value, onChange, onSubmit, onTab, placeholder, focus 
         if (c > 0) emit(value.slice(0, c - 1) + value.slice(c), c - 1)
         return
       }
-      // Printable insert. Strip any leaked mouse-report bytes first.
+      // Printable insert.
       if (input && !key.ctrl && !key.meta && !key.escape) {
-        const clean = stripMouseReports(input)
-        if (clean) emit(value.slice(0, c) + clean + value.slice(c), c + clean.length)
+        emit(value.slice(0, c) + input + value.slice(c), c + input.length)
       }
     },
     {isActive: focus},
