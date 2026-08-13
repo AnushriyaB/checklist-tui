@@ -1,10 +1,9 @@
 import {spawn} from 'node:child_process'
 
-export type Cue = 'toggle' | 'complete' | 'generate'
+export type Cue = 'complete' | 'generate'
 
 // macOS ships tasteful system cues — borrow a few, no bundled files needed.
 const FILES: Record<Cue, string> = {
-  toggle: '/System/Library/Sounds/Tink.aiff', // soft tick when a task is checked
   complete: '/System/Library/Sounds/Glass.aiff', // chime when a whole list is done
   generate: '/System/Library/Sounds/Pop.aiff', // quiet pop when AI finishes
 }

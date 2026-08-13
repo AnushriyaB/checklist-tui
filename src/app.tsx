@@ -187,11 +187,10 @@ function AppInner({initialGoal}: {initialGoal?: string}) {
       // (the task we just toggled — only fire if it was the one unchecked task left)
       const target = current.groups.flatMap(g => g.tasks).find(t => t.id === taskId)
       const checkingOff = target && !target.done // done was false → true
+      // Only the whole-list-done moment gets a sound — a per-task tick read as an error blip.
       if (willComplete && checkingOff) {
         setCelebrating(true)
         if (soundOn) play('complete')
-      } else if (checkingOff && soundOn) {
-        play('toggle') // soft tick; no sound when un-checking
       }
     }
   }
@@ -274,7 +273,7 @@ function AppInner({initialGoal}: {initialGoal?: string}) {
     // Mute toggle (only outside text-entry, where 'm' is a character).
     if (input === 'm' && (phase.name === 'list' || phase.name === 'detail')) {
       setSoundOn(on => {
-        if (!on) play('toggle') // confirm turning sound back on
+        if (!on) play('generate') // soft pop to confirm turning sound back on
         return !on
       })
       return
