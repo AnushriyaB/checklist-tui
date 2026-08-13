@@ -10,6 +10,7 @@ import {HelpOverlay} from './views/help'
 import {Dashboard} from './views/dashboard'
 import {DetailView} from './views/detail'
 import {generateChecklist, GenerationError, type GenErrorCode} from './lib/ai'
+import {play, soundAvailable} from './lib/sound'
 import {truncate} from './lib/text'
 import {ThemeProvider, useTheme} from './theme'
 import {
@@ -91,6 +92,7 @@ function AppInner({initialGoal}: {initialGoal?: string}) {
   const [draft, setDraft] = useState('') // shared value for the text inputs
   const [suggestionIndex, setSuggestionIndex] = useState(0) // which goal suggestion Tab fills
   const [celebrating, setCelebrating] = useState(false) // brief burst when a list hits 100%
+  const [soundOn, setSoundOn] = useState(soundAvailable) // subtle afplay cues (m toggles)
   const [taskFilter, setTaskFilter] = useState<'all' | 'done' | 'todo'>('all') // '/' cycles this
   const [showHelp, setShowHelp] = useState(false) // '?' overlay
   const genAbort = useRef<AbortController | undefined>(undefined) // cancels an in-flight generation
@@ -178,13 +180,19 @@ function AppInner({initialGoal}: {initialGoal?: string}) {
         tasks: g.tasks.map(t => (t.id === taskId ? {...t, done: !t.done} : t)),
       })),
     }))
-    // Celebrate the moment a checklist goes from incomplete to fully done.
+    // Celebrate + chime the moment a checklist goes from incomplete to fully done.
     if (current) {
       const before = progress(current)
       const willComplete = before.total > 0 && before.done === before.total - 1
       // (the task we just toggled — only fire if it was the one unchecked task left)
       const target = current.groups.flatMap(g => g.tasks).find(t => t.id === taskId)
-      if (willComplete && target && !target.done) setCelebrating(true)
+      const checkingOff = target && !target.done // done was false → true
+      if (willComplete && checkingOff) {
+        setCelebrating(true)
+        if (soundOn) play('complete')
+      } else if (checkingOff && soundOn) {
+        play('toggle') // soft tick; no sound when un-checking
+      }
     }
   }
 
@@ -228,6 +236,7 @@ function AppInner({initialGoal}: {initialGoal?: string}) {
         setListCursor(0)
         setTaskCursor(0)
         setPhase({name: 'detail', id: created.id})
+        if (soundOn) play('generate') // quiet pop when the checklist lands
       } catch (error) {
         if (controller.signal.aborted) return // user cancelled — handled elsewhere
         const code = error instanceof GenerationError ? error.code : 'SERVICE'
@@ -260,6 +269,14 @@ function AppInner({initialGoal}: {initialGoal?: string}) {
     }
     if (input === '?' && (phase.name === 'list' || phase.name === 'detail')) {
       setShowHelp(true)
+      return
+    }
+    // Mute toggle (only outside text-entry, where 'm' is a character).
+    if (input === 'm' && (phase.name === 'list' || phase.name === 'detail')) {
+      setSoundOn(on => {
+        if (!on) play('toggle') // confirm turning sound back on
+        return !on
+      })
       return
     }
 

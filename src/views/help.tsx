@@ -41,6 +41,7 @@ const HELP: Array<{heading: string; rows: Array<[keys: string, desc: string]>}> 
     heading: 'Anywhere',
     rows: [
       ['esc', 'back / cancel'],
+      ['m', 'mute / unmute sounds'],
       ['^t', 'cycle theme (dark / light / auto)'],
       ['?', 'toggle this help'],
       ['^c', 'quit'],
