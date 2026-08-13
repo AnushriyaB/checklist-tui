@@ -4,7 +4,7 @@ import {TextField} from './components/text-field'
 import {Shortcuts} from './components/shortcuts'
 import {Spinner} from './components/spinner'
 import {Shimmer} from './components/shimmer'
-import {Welcome} from './components/welcome'
+import {Welcome, Logo} from './components/welcome'
 import {Screen, Gap, useColumns, useRows, contentWidth} from './components/screen'
 import {HelpOverlay} from './views/help'
 import {Dashboard} from './views/dashboard'
@@ -404,9 +404,7 @@ function AppInner({initialGoal}: {initialGoal?: string}) {
         phase.name === 'confirmDelete' ||
         phase.name === 'prompt' ||
         phase.name === 'generating' ||
-        phase.name === 'genError') && (
-        <Text bold color={theme.accent}>✓ checklists</Text>
-      )}
+        phase.name === 'genError') && <Logo />}
 
       <Gap />
 
