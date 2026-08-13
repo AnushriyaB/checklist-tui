@@ -17,13 +17,13 @@ function Card({items, bg}: {items: Hint[]; bg?: string}) {
   return (
     <Text backgroundColor={bg} wrap="truncate-end">
       <Text backgroundColor={bg}> </Text>
-      {items.map(([key, label, action = true], i) => (
+      {/* Every hint is a keyboard shortcut, so the key is always accent (blue,
+          bold) and the label always muted (gray) — no click distinction. */}
+      {items.map(([key, label], i) => (
         <Text key={`${key}-${label}`} backgroundColor={bg}>
           {i > 0 ? <Text backgroundColor={bg} color={theme.muted} dimColor>{' · '}</Text> : null}
-          <Text backgroundColor={bg} color={action ? theme.accent : theme.muted} dimColor={!action} bold={action}>
-            {key}
-          </Text>
-          <Text backgroundColor={bg} color={theme.muted} dimColor={!action}>{` ${label}`}</Text>
+          <Text backgroundColor={bg} color={theme.accent} bold>{key}</Text>
+          <Text backgroundColor={bg} color={theme.muted} dimColor={theme.dimMuted}>{` ${label}`}</Text>
         </Text>
       ))}
       <Text backgroundColor={bg}> </Text>

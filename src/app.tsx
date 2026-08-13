@@ -1,7 +1,7 @@
 import React, {useEffect, useRef, useState} from 'react'
 import {Box, Text, useApp, useInput} from 'ink'
 import {TextField} from './components/text-field'
-import {Shortcuts, type Hint} from './components/shortcuts'
+import {Shortcuts} from './components/shortcuts'
 import {Spinner} from './components/spinner'
 import {Shimmer} from './components/shimmer'
 import {Welcome} from './components/welcome'
@@ -55,8 +55,6 @@ const HINTS: Record<Phase['name'], Array<[string, string]>> = {
 }
 
 const RETRY_LABEL = '↵  Try again'
-// Keys shown dimmed (navigation / "get out" keys), vs accent for real actions.
-const MUTED_KEYS = new Set(['↑↓', '^c', 'esc'])
 
 // Goal suggestions across the perspectives the user cares about (design / eng /
 // PM), plus one everyday one. Tab in the prompt fills the current one.
@@ -379,8 +377,6 @@ function AppInner({initialGoal}: {initialGoal?: string}) {
   // --- Footer hints ---------------------------------------------------------
   const hints: Array<[string, string]> =
     phase.name === 'genError' ? [['↵', 'try again'], ...HINTS.genError] : HINTS[phase.name]
-  // Navigation/system keys read muted; the action keys get the accent.
-  const footerHints: Hint[] = hints.map(([k, l]) => [k, l, !MUTED_KEYS.has(k)])
 
   // --- Render ---------------------------------------------------------------
   // Below this the fixed-width pieces (borders, padding, progress bar) can't
@@ -523,7 +519,7 @@ function AppInner({initialGoal}: {initialGoal?: string}) {
         })()}
 
       </Box>
-      <Shortcuts items={footerHints} />
+      <Shortcuts items={hints} />
     </Screen>
   )
 }
