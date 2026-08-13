@@ -4,4 +4,5 @@ src
 README.md
 tsconfig.json
 tsup.config.ts
+package.json
 package-lock.json

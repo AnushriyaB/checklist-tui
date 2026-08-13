@@ -1,6 +1,8 @@
 // Vercel Function — the OpenRouter key lives here as OPENROUTER_API_KEY.
 // The TUI never sees it. Only {goal} comes in; only {title, items} go out.
 
+declare const process: {env: Record<string, string | undefined>}
+
 const OPENROUTER_URL = 'https://openrouter.ai/api/v1/chat/completions'
 const MODEL = 'x-ai/grok-4.6'
 const MAX_GOAL = 400

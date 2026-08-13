@@ -2,8 +2,7 @@
 // Generation goes through a Vercel function that holds the key.
 
 const GENERATE_URL =
-  process.env.CHECKLIST_API_URL ??
-  'https://checklist-tui-bhardwajanushriya-gmailcoms-projects.vercel.app/api/generate'
+  process.env.CHECKLIST_API_URL ?? 'https://checklist-tui.vercel.app/api/generate'
 
 export type AiChecklist = {title: string; items: Array<{text: string; subtasks: string[]}>}
 
