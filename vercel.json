@@ -2,7 +2,8 @@
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "framework": null,
   "installCommand": "echo skip-install",
-  "buildCommand": "echo skip-build",
+  "buildCommand": "mkdir -p public",
+  "outputDirectory": "public",
   "functions": {
     "api/generate.ts": {
       "maxDuration": 60
