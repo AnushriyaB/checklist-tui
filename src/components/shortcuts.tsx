@@ -13,7 +13,9 @@ function Group({items}: {items: Hint[]}) {
     <Text wrap="truncate-end">
       {items.map(([key, label], i) => (
         <Text key={`${key}-${label}`}>
-          {i > 0 ? <Text color={theme.muted} dimColor>{' · '}</Text> : null}
+          {/* muted color, NOT the dim attribute: dim + bold share a reset, so a
+              dimmed separator was bleeding into the next bold key (faded look). */}
+          {i > 0 ? <Text color={theme.muted}>{' · '}</Text> : null}
           <Text color={theme.accent} bold>{key}</Text>
           <Text color={theme.muted} dimColor={theme.dimMuted}>{` ${label}`}</Text>
         </Text>
