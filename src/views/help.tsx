@@ -40,7 +40,6 @@ const HELP: Array<{heading: string; rows: Array<[keys: string, desc: string]>}> 
   {
     heading: 'Anywhere',
     rows: [
-      ['^t', 'cycle theme'],
       ['esc', 'back / cancel'],
       ['?', 'toggle this help'],
       ['^c', 'quit'],

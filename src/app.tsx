@@ -11,7 +11,7 @@ import {Dashboard} from './views/dashboard'
 import {DetailView} from './views/detail'
 import {generateChecklist, GenerationError, type GenErrorCode} from './lib/ai'
 import {truncate} from './lib/text'
-import {ThemeProvider, useTheme, nextThemeMode, type ThemeMode} from './theme'
+import {ThemeProvider, useTheme} from './theme'
 import {
   loadChecklists,
   saveChecklists,
@@ -35,13 +35,13 @@ type Phase =
   | {name: 'confirmDelete'; id: string}
   | {name: 'prompt'}
   | {name: 'generating'; goal: string}
-  | {name: 'genError'; goal: string; code: GenErrorCode}
+  | {name: 'genError'; goal: string; code: GenErrorCode; detail?: string}
   | {name: 'editTask'; id: string; taskId: string}
 
 // Each phase declares its own keyboard hints — the row shown at the bottom.
 // (genError's hints are built dynamically — retry only makes sense for failures.)
 const HINTS: Record<Phase['name'], Array<[string, string]>> = {
-  list: [['↑↓', 'move'], ['↵', 'open'], ['g', 'generate'], ['n', 'new'], ['d', 'delete'], ['?', 'help'], ['^t', 'theme'], ['^c', 'quit']],
+  list: [['↑↓', 'move'], ['↵', 'open'], ['g', 'generate'], ['n', 'new'], ['d', 'delete'], ['?', 'help'], ['^c', 'quit']],
   new: [['↵', 'create'], ['esc', 'cancel']],
   detail: [['↑↓', 'move'], ['space', 'toggle'], ['e', 'edit'], ['a', 'add'], ['x', 'delete'], ['/', 'filter'], ['?', 'help'], ['esc', 'back']],
   addTask: [['↵', 'add'], ['esc', 'done']],
@@ -52,13 +52,6 @@ const HINTS: Record<Phase['name'], Array<[string, string]>> = {
   genError: [['esc', 'back']],
 }
 
-// One friendly, provider-agnostic message for every failure. The user never
-// sees "OpenRouter", an API-key name, or any other plumbing — just what happened
-// and the two ways forward (retry, or go back).
-const GEN_ERROR = {
-  title: "Couldn't generate that checklist",
-  body: 'Something went wrong this time. Give it another try, or head back and add one yourself.',
-}
 const RETRY_LABEL = '↵  Try again'
 // Footer keys shown muted (navigation / system), vs accent for action keys.
 const MUTED_KEYS = new Set(['↑↓', '^c'])
@@ -77,17 +70,14 @@ const SUGGESTIONS = [
 ]
 
 export function App({initialGoal}: {initialGoal?: string}) {
-  // Default to `dark` so the launch background tint is coherent; `^t` cycles to
-  // light or `auto` (auto leaves your terminal's own colours untouched).
-  const [mode, setMode] = useState<ThemeMode>('dark')
   return (
-    <ThemeProvider mode={mode}>
-      <AppInner cycleTheme={() => setMode(nextThemeMode)} initialGoal={initialGoal} />
+    <ThemeProvider mode="dark">
+      <AppInner initialGoal={initialGoal} />
     </ThemeProvider>
   )
 }
 
-function AppInner({cycleTheme, initialGoal}: {cycleTheme: () => void; initialGoal?: string}) {
+function AppInner({initialGoal}: {initialGoal?: string}) {
   const theme = useTheme()
   const {exit} = useApp()
   const width = contentWidth(useColumns()) // content area, re-measured on resize
@@ -241,7 +231,8 @@ function AppInner({cycleTheme, initialGoal}: {cycleTheme: () => void; initialGoa
       } catch (error) {
         if (controller.signal.aborted) return // user cancelled — handled elsewhere
         const code = error instanceof GenerationError ? error.code : 'SERVICE'
-        setPhase({name: 'genError', goal, code})
+        const detail = error instanceof GenerationError ? error.detail : String(error)
+        setPhase({name: 'genError', goal, code, detail})
       }
     })()
   }
@@ -261,7 +252,6 @@ function AppInner({cycleTheme, initialGoal}: {cycleTheme: () => void; initialGoa
   useInput((input, key) => {
     // Global — works in every phase.
     if (key.ctrl && input === 'c') return exit()
-    if (key.ctrl && input === 't') return cycleTheme()
 
     // Help overlay swallows everything but its own close keys.
     if (showHelp) {
@@ -485,8 +475,18 @@ function AppInner({cycleTheme, initialGoal}: {cycleTheme: () => void; initialGoa
             paddingX={2}
             paddingY={1}
           >
-            <Text bold color={theme.text} wrap="wrap">{GEN_ERROR.title}</Text>
-            <Text color={theme.muted} dimColor={theme.dimMuted} wrap="wrap">{GEN_ERROR.body}</Text>
+            <Text bold color={theme.text} wrap="wrap">{`Your checklist “${truncate(phase.goal, 46)}” didn't generate`}</Text>
+            <Text color={theme.muted} dimColor={theme.dimMuted} wrap="wrap">
+              {phase.code === 'NO_KEY'
+                ? 'AI generation isn’t set up on this machine yet. Set OPENROUTER_API_KEY, then try again.'
+                : 'Something went wrong this time. Give it another try, or head back and add tasks yourself.'}
+            </Text>
+            {phase.code !== 'NO_KEY' && phase.detail ? (
+              <>
+                <Text> </Text>
+                <Text color={theme.muted} dimColor wrap="truncate-end">{`(${phase.detail})`}</Text>
+              </>
+            ) : null}
           </Box>
           <Box marginTop={1}>
             <Box borderStyle="round" borderColor={theme.accent} paddingX={2}>

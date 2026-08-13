@@ -3,7 +3,7 @@
 // (Make Me A Checklist) — it's the real value here.
 
 const OPENROUTER_URL = 'https://openrouter.ai/api/v1/chat/completions'
-const MODEL = 'minimax/minimax-m3'
+const MODEL = 'x-ai/grok-4.6'
 
 // Tuned for a terminal checklist: steps must be short and scannable, because
 // they're read in a narrow column, not a wide web card. Same JSON shape as the
@@ -52,19 +52,33 @@ export type GenErrorCode = 'NO_KEY' | 'NETWORK' | 'SERVICE' | 'BAD_RESPONSE'
 
 export class GenerationError extends Error {
   code: GenErrorCode
-  constructor(code: GenErrorCode, message: string) {
+  detail?: string // short technical reason, for surfacing during debugging
+  constructor(code: GenErrorCode, message: string, detail?: string) {
     super(message)
     this.code = code
+    this.detail = detail
     this.name = 'GenerationError'
   }
 }
 
 export const hasApiKey = () => Boolean(process.env.OPENROUTER_API_KEY)
 
+// Pull a JSON object out of the model's reply even if it's wrapped in ```json
+// fences or a sentence of prose — more forgiving than a bare JSON.parse.
+function extractJson(text: string): unknown {
+  let s = text.trim()
+  const fenced = s.match(/```(?:json)?\s*([\s\S]*?)```/i)
+  if (fenced) s = fenced[1]!.trim()
+  const first = s.indexOf('{')
+  const last = s.lastIndexOf('}')
+  if (first !== -1 && last > first) s = s.slice(first, last + 1)
+  return JSON.parse(s)
+}
+
 /** Turn a one-line goal into a structured checklist. Throws GenerationError. */
 export async function generateChecklist(goal: string, signal?: AbortSignal): Promise<AiChecklist> {
   const apiKey = process.env.OPENROUTER_API_KEY
-  if (!apiKey) throw new GenerationError('NO_KEY', 'No OpenRouter API key in the environment')
+  if (!apiKey) throw new GenerationError('NO_KEY', 'No API key in the environment')
 
   let response: Response
   try {
@@ -73,42 +87,54 @@ export async function generateChecklist(goal: string, signal?: AbortSignal): Pro
       headers: {
         'Content-Type': 'application/json',
         Authorization: `Bearer ${apiKey}`,
+        'HTTP-Referer': 'https://github.com/AnushriyaB/checklist-tui',
         'X-Title': 'checklist-tui',
       },
+      // No response_format: some models 400 on it. The prompt already demands
+      // JSON, and extractJson() is forgiving — so this works across models.
       body: JSON.stringify({
         model: MODEL,
         messages: [
           {role: 'system', content: SYSTEM_PROMPT},
           {role: 'user', content: goal},
         ],
-        response_format: {type: 'json_object'},
         temperature: 0.7,
       }),
       signal,
     })
   } catch (error) {
     if (signal?.aborted) throw error // let the caller treat cancellation separately
-    throw new GenerationError('NETWORK', 'Could not reach OpenRouter')
+    throw new GenerationError('NETWORK', 'Could not reach the service', 'network request failed')
   }
 
-  if (!response.ok) throw new GenerationError('SERVICE', `OpenRouter responded ${response.status}`)
+  if (!response.ok) {
+    const body = await response.text().catch(() => '')
+    let reason = `HTTP ${response.status}`
+    try {
+      const j = JSON.parse(body) as {error?: {message?: string}}
+      if (j?.error?.message) reason = `${response.status}: ${j.error.message}`
+    } catch {
+      /* body wasn't JSON */
+    }
+    throw new GenerationError('SERVICE', 'Service returned an error', reason.slice(0, 160))
+  }
 
   const data = (await response.json().catch(() => null)) as
     | {choices?: Array<{message?: {content?: string}}>}
     | null
   const content = data?.choices?.[0]?.message?.content
-  if (!content) throw new GenerationError('BAD_RESPONSE', 'Empty response from the model')
+  if (!content) throw new GenerationError('BAD_RESPONSE', 'Empty response', 'no content in response')
 
   let parsed: unknown
   try {
-    parsed = JSON.parse(content)
+    parsed = extractJson(content)
   } catch {
-    throw new GenerationError('BAD_RESPONSE', 'Model did not return valid JSON')
+    throw new GenerationError('BAD_RESPONSE', 'Malformed response', `not JSON: ${content.slice(0, 80)}`)
   }
 
   const result = parsed as AiChecklist
   if (!result || typeof result.title !== 'string' || !Array.isArray(result.items)) {
-    throw new GenerationError('BAD_RESPONSE', 'Model returned an unexpected shape')
+    throw new GenerationError('BAD_RESPONSE', 'Unexpected shape', 'missing title/items')
   }
   return result
 }
