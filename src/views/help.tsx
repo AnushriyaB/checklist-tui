@@ -41,6 +41,7 @@ const HELP: Array<{heading: string; rows: Array<[keys: string, desc: string]>}> 
     heading: 'Anywhere',
     rows: [
       ['esc', 'back / cancel'],
+      ['^t', 'cycle theme (dark / light / auto)'],
       ['?', 'toggle this help'],
       ['^c', 'quit'],
     ],
@@ -53,7 +54,7 @@ export function HelpOverlay() {
   const width = contentWidth(useColumns())
   return (
     <Screen>
-      <Text bold color={theme.accent}>✓ checklists — shortcuts</Text>
+      <Text bold color={theme.accent}>Checklist — shortcuts</Text>
       <Gap />
       <Box
         flexDirection="column"

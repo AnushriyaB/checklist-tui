@@ -40,10 +40,12 @@ type Phase =
 
 // Each phase declares its own keyboard hints — the row shown at the bottom.
 // (genError's hints are built dynamically — retry only makes sense for failures.)
+// Footer shows only the primary actions per screen — everything else lives in
+// the `?` help overlay, so the bar stays quiet (Claude-Code style).
 const HINTS: Record<Phase['name'], Array<[string, string]>> = {
-  list: [['↑↓', 'move'], ['↵', 'open'], ['g', 'generate'], ['n', 'new'], ['d', 'delete'], ['?', 'help'], ['^c', 'quit']],
+  list: [['↵', 'open'], ['g', 'generate'], ['?', 'help']],
   new: [['↵', 'create'], ['esc', 'cancel']],
-  detail: [['↑↓', 'move'], ['space', 'toggle'], ['e', 'edit'], ['a', 'add'], ['x', 'delete'], ['/', 'filter'], ['?', 'help'], ['esc', 'back']],
+  detail: [['space', 'toggle'], ['a', 'add'], ['esc', 'back'], ['?', 'help']],
   addTask: [['↵', 'add'], ['esc', 'done']],
   editTask: [['↵', 'save'], ['esc', 'cancel']],
   confirmDelete: [['y', 'delete'], ['n', 'keep']],
@@ -53,8 +55,8 @@ const HINTS: Record<Phase['name'], Array<[string, string]>> = {
 }
 
 const RETRY_LABEL = '↵  Try again'
-// Footer keys shown muted (navigation / system), vs accent for action keys.
-const MUTED_KEYS = new Set(['↑↓', '^c'])
+// Keys shown dimmed (navigation / "get out" keys), vs accent for real actions.
+const MUTED_KEYS = new Set(['↑↓', '^c', 'esc'])
 
 // Goal suggestions across the perspectives the user cares about (design / eng /
 // PM), plus one everyday one. Tab in the prompt fills the current one.
@@ -395,6 +397,8 @@ function AppInner({initialGoal}: {initialGoal?: string}) {
 
   return (
     <Screen>
+      {/* content grows to fill, pushing the footer to the bottom of the screen */}
+      <Box flexDirection="column" flexGrow={1} flexShrink={1} minWidth={0}>
       {phase.name === 'list' && <Welcome count={checklists.length} width={width} />}
       {(phase.name === 'new' ||
         phase.name === 'confirmDelete' ||
@@ -518,7 +522,7 @@ function AppInner({initialGoal}: {initialGoal?: string}) {
           )
         })()}
 
-      <Gap />
+      </Box>
       <Shortcuts items={footerHints} />
     </Screen>
   )

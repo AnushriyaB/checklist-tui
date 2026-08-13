@@ -39,14 +39,15 @@ export function useRows(): number {
 }
 
 /**
- * Page frame: pads the content and re-measures on terminal resize so the
- * layout stays put. Capped at 100 columns so lines don't sprawl on a wide
- * terminal.
+ * Full-height page frame: fills the terminal (re-measured on resize) so a
+ * flex-grow content area can push the footer to the bottom. Capped at 100
+ * columns so lines don't sprawl on a wide terminal.
  */
 export function Screen({children}: {children: ReactNode}) {
   const cols = useColumns()
+  const rows = useRows()
   return (
-    <Box flexDirection="column" paddingX={PAD_X} paddingY={1} width={Math.min(cols, MAX_WIDTH)}>
+    <Box flexDirection="column" height={rows} paddingX={PAD_X} paddingY={1} width={Math.min(cols, MAX_WIDTH)}>
       {children}
     </Box>
   )
