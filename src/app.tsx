@@ -261,9 +261,9 @@ function AppInner({initialGoal}: {initialGoal?: string}) {
     // Global — works in every phase.
     if (key.ctrl && input === 'c') return exit()
 
-    // Help overlay swallows everything but its own close keys.
+    // Help overlay: esc closes it (only key that works here).
     if (showHelp) {
-      if (input === '?' || key.escape) setShowHelp(false)
+      if (key.escape) setShowHelp(false)
       return
     }
     if (input === '?' && (phase.name === 'list' || phase.name === 'detail')) {
