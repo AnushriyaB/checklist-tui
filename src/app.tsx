@@ -477,16 +477,8 @@ function AppInner({initialGoal}: {initialGoal?: string}) {
           >
             <Text bold color={theme.text} wrap="wrap">{`Your checklist “${truncate(phase.goal, 46)}” didn't generate`}</Text>
             <Text color={theme.muted} dimColor={theme.dimMuted} wrap="wrap">
-              {phase.code === 'NO_KEY'
-                ? 'AI generation isn’t set up on this machine yet. Set OPENROUTER_API_KEY, then try again.'
-                : 'Something went wrong this time. Give it another try, or head back and add tasks yourself.'}
+              Something went wrong this time. Give it another try, or head back and add tasks yourself.
             </Text>
-            {phase.code !== 'NO_KEY' && phase.detail ? (
-              <>
-                <Text> </Text>
-                <Text color={theme.muted} dimColor wrap="truncate-end">{`(${phase.detail})`}</Text>
-              </>
-            ) : null}
           </Box>
           <Box marginTop={1}>
             <Box borderStyle="round" borderColor={theme.accent} paddingX={2}>
