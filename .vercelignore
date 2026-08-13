@@ -1,0 +1,7 @@
+node_modules
+dist
+src
+README.md
+tsconfig.json
+tsup.config.ts
+package-lock.json
