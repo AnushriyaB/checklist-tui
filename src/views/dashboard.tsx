@@ -51,13 +51,23 @@ export function Dashboard({checklists, listCursor, width, showBar}: Props) {
               <Text backgroundColor={bg} color={theme.text} bold={selected}>{title}</Text>
               <Text backgroundColor={bg}> </Text>
               {showBar ? (
-                <Text>
-                  <Text backgroundColor={bg} color={complete ? theme.accent : theme.text}>{'█'.repeat(filled)}</Text>
-                  <Text backgroundColor={bg} color={theme.muted} dimColor={theme.dimMuted}>{'░'.repeat(barW - filled)}</Text>
-                  <Text backgroundColor={bg}> </Text>
-                </Text>
+                complete ? (
+                  // Done: replace the bar with "Completed".
+                  <Text>
+                    <Text backgroundColor={bg} color={theme.accent} bold>{'Completed'.padEnd(barW)}</Text>
+                    <Text backgroundColor={bg}> </Text>
+                  </Text>
+                ) : (
+                  <Text>
+                    <Text backgroundColor={bg} color={theme.text}>{'█'.repeat(filled)}</Text>
+                    <Text backgroundColor={bg} color={theme.muted} dimColor={theme.dimMuted}>{'░'.repeat(barW - filled)}</Text>
+                    <Text backgroundColor={bg}> </Text>
+                  </Text>
+                )
               ) : null}
-              <Text backgroundColor={bg} color={theme.muted} dimColor={theme.dimMuted}>{countStr}</Text>
+              <Text backgroundColor={bg} color={complete ? theme.accent : theme.muted} dimColor={!complete && theme.dimMuted}>
+                {countStr}
+              </Text>
             </Text>
           </Box>
         )
