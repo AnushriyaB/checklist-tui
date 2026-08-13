@@ -4,52 +4,15 @@ import {useTheme} from '../theme'
 import {Screen, Gap, contentWidth, useColumns} from '../components/screen'
 import {Shortcuts} from '../components/shortcuts'
 
-// Shortcut reference for the '?' overlay. Keys use plain words (opt/ctrl) rather
-// than ⌥/⌃ glyphs to avoid width surprises in the fixed key column.
-const HELP: Array<{heading: string; rows: Array<[keys: string, desc: string]>}> = [
-  {
-    heading: 'Dashboard',
-    rows: [
-      ['↑↓ / j k', 'move between checklists'],
-      ['↵', 'open'],
-      ['g', 'generate one with AI'],
-      ['n', 'new empty list'],
-      ['d', 'delete list'],
-    ],
-  },
-  {
-    heading: 'Inside a checklist',
-    rows: [
-      ['↑↓ / j k', 'move between tasks'],
-      ['space', 'toggle done'],
-      ['e', 'edit task'],
-      ['a', 'add task'],
-      ['x', 'delete task'],
-      ['/', 'filter: all → done → to-do'],
-    ],
-  },
-  {
-    heading: 'Typing',
-    rows: [
-      ['← →', 'move by character'],
-      ['opt ← →', 'move by word'],
-      ['ctrl a/e', 'jump to line start / end'],
-      ['tab', 'use suggestion (goal prompt)'],
-    ],
-  },
-  {
-    heading: 'Anywhere',
-    rows: [
-      ['esc', 'back / cancel'],
-      ['m', 'mute / unmute sounds'],
-      ['^t', 'cycle theme (dark / light / auto)'],
-      ['?', 'toggle this help'],
-      ['^c', 'quit'],
-    ],
-  },
+// Just the essentials, grouped by where you are. (Cursor nav ← → / word / line
+// and vim j k still work — they don't need documenting.)
+const HELP: Array<{heading: string; keys: Array<[string, string]>}> = [
+  {heading: 'Dashboard', keys: [['↵', 'open'], ['g', 'generate'], ['n', 'new'], ['d', 'delete']]},
+  {heading: 'In a checklist', keys: [['space', 'toggle'], ['a', 'add'], ['e', 'edit'], ['x', 'delete'], ['/', 'filter']]},
+  {heading: 'Anywhere', keys: [['esc', 'back'], ['^t', 'theme'], ['m', 'sound'], ['^c', 'quit']]},
 ]
 
-/** The full-screen '?' shortcut reference. */
+/** The compact '?' shortcut reference. */
 export function HelpOverlay() {
   const theme = useTheme()
   const width = contentWidth(useColumns())
@@ -69,15 +32,16 @@ export function HelpOverlay() {
       >
         {HELP.map((section, si) => (
           <Box key={section.heading} flexDirection="column" flexShrink={0} marginTop={si === 0 ? 0 : 1}>
-            <Text bold color={theme.muted} dimColor={theme.dimMuted}>{section.heading}</Text>
-            {section.rows.map(([keys, desc]) => (
-              <Box key={keys} flexShrink={0}>
-                <Box width={12} flexShrink={0}><Text color={theme.accent}>{keys}</Text></Box>
-                <Box flexGrow={1} flexShrink={1} minWidth={0}>
-                  <Text color={theme.text}>{desc}</Text>
-                </Box>
-              </Box>
-            ))}
+            <Text color={theme.muted} dimColor={theme.dimMuted}>{section.heading}</Text>
+            <Box flexWrap="wrap" width={width - 6}>
+              {section.keys.map(([key, label], i) => (
+                <Text key={key + label}>
+                  <Text color={theme.accent} bold>{key}</Text>
+                  <Text color={theme.text}>{` ${label}`}</Text>
+                  {i < section.keys.length - 1 ? <Text>{'    '}</Text> : null}
+                </Text>
+              ))}
+            </Box>
           </Box>
         ))}
       </Box>
