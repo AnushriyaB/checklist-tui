@@ -413,8 +413,9 @@ function AppInner({initialGoal}: {initialGoal?: string}) {
 
   return (
     <Screen>
-      {/* content grows to fill, pushing the footer to the bottom of the screen */}
-      <Box flexDirection="column" flexGrow={1} flexShrink={1} minWidth={0}>
+      {/* grows to fill (footer sits at the bottom); never shrinks — shrinking
+          would squeeze rows until they overlap on a short terminal. */}
+      <Box flexDirection="column" flexGrow={1} flexShrink={0} minWidth={0}>
       {phase.name === 'list' && <Welcome width={width} />}
       {(phase.name === 'new' ||
         phase.name === 'confirmDelete' ||

@@ -54,11 +54,12 @@ export function HelpOverlay() {
   const theme = useTheme()
   const width = contentWidth(useColumns())
   return (
-    <Screen>
+    <Screen fill={false}>
       <Text bold color={theme.accent}>Checklist — shortcuts</Text>
       <Gap />
       <Box
         flexDirection="column"
+        flexShrink={0}
         width={width}
         borderStyle="round"
         borderColor={theme.muted}
@@ -67,10 +68,10 @@ export function HelpOverlay() {
         paddingY={1}
       >
         {HELP.map((section, si) => (
-          <Box key={section.heading} flexDirection="column" marginTop={si === 0 ? 0 : 1}>
+          <Box key={section.heading} flexDirection="column" flexShrink={0} marginTop={si === 0 ? 0 : 1}>
             <Text bold color={theme.muted} dimColor={theme.dimMuted}>{section.heading}</Text>
             {section.rows.map(([keys, desc]) => (
-              <Box key={keys}>
+              <Box key={keys} flexShrink={0}>
                 <Box width={12} flexShrink={0}><Text color={theme.accent}>{keys}</Text></Box>
                 <Box flexGrow={1} flexShrink={1} minWidth={0}>
                   <Text color={theme.text}>{desc}</Text>

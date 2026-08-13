@@ -39,15 +39,23 @@ export function useRows(): number {
 }
 
 /**
- * Full-height page frame: fills the terminal (re-measured on resize) so a
- * flex-grow content area can push the footer to the bottom. Capped at 100
- * columns so lines don't sprawl on a wide terminal.
+ * Page frame. With `fill` (the default) it fills the terminal height so a
+ * flex-grow content area can push the footer to the bottom. With `fill={false}`
+ * it takes its natural height, top-aligned — used by overlays like help, which
+ * must NOT be squeezed into a fixed height (that shrinks rows until they overlap).
+ * Capped at 100 columns so lines don't sprawl on a wide terminal.
  */
-export function Screen({children}: {children: ReactNode}) {
+export function Screen({children, fill = true}: {children: ReactNode; fill?: boolean}) {
   const cols = useColumns()
   const rows = useRows()
   return (
-    <Box flexDirection="column" height={rows} paddingX={PAD_X} paddingY={1} width={Math.min(cols, MAX_WIDTH)}>
+    <Box
+      flexDirection="column"
+      height={fill ? rows : undefined}
+      paddingX={PAD_X}
+      paddingY={1}
+      width={Math.min(cols, MAX_WIDTH)}
+    >
       {children}
     </Box>
   )
