@@ -399,7 +399,7 @@ function AppInner({initialGoal}: {initialGoal?: string}) {
     <Screen>
       {/* content grows to fill, pushing the footer to the bottom of the screen */}
       <Box flexDirection="column" flexGrow={1} flexShrink={1} minWidth={0}>
-      {phase.name === 'list' && <Welcome count={checklists.length} width={width} />}
+      {phase.name === 'list' && <Welcome width={width} />}
       {(phase.name === 'new' ||
         phase.name === 'confirmDelete' ||
         phase.name === 'prompt' ||

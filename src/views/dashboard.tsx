@@ -27,7 +27,8 @@ export function Dashboard({checklists, listCursor, width, showBar}: Props) {
     const {done, total} = progress(c)
     return `${done}/${total}`.length
   }))
-  const titleW = Math.max(4, width - 3 - (showBar ? 11 : 0) - countW)
+  const numW = String(checklists.length).length // "1." … "12." aligned
+  const titleW = Math.max(4, width - 3 - (numW + 2) - (showBar ? 11 : 0) - countW)
 
   return (
     <Box flexDirection="column">
@@ -46,6 +47,7 @@ export function Dashboard({checklists, listCursor, width, showBar}: Props) {
           <Box key={c.id} width={width}>
             <Text backgroundColor={bg} wrap="truncate-end">
               <Text backgroundColor={bg} color={theme.accent} bold>{selected ? '❯ ' : '  '}</Text>
+              <Text backgroundColor={bg} color={theme.muted} dimColor={theme.dimMuted}>{`${i + 1}`.padStart(numW) + '. '}</Text>
               <Text backgroundColor={bg} color={theme.text} bold={selected}>{title}</Text>
               <Text backgroundColor={bg}> </Text>
               {showBar ? (
