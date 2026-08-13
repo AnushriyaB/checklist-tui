@@ -261,9 +261,10 @@ function AppInner({initialGoal}: {initialGoal?: string}) {
     // Global — works in every phase.
     if (key.ctrl && input === 'c') return exit()
 
-    // Help overlay: esc closes it (only key that works here).
+    // Help overlay: esc or ? closes it (so ? toggles open/close). The footer
+    // only advertises esc, but ? still works so you can reopen it.
     if (showHelp) {
-      if (key.escape) setShowHelp(false)
+      if (key.escape || input === '?') setShowHelp(false)
       return
     }
     if (input === '?' && (phase.name === 'list' || phase.name === 'detail')) {
