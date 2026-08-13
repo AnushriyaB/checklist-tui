@@ -375,10 +375,12 @@ function AppInner({initialGoal}: {initialGoal?: string}) {
   }, {isActive: Boolean(process.stdin.isTTY)}) // no raw-mode crash when piped / non-TTY
 
   // --- Footer hints ---------------------------------------------------------
-  // `esc` + `^c quit` get routed to their own box on the right by <Shortcuts>.
+  // `esc` + `^c quit` get routed to their own group on the right by <Shortcuts>.
+  // Quit only shows on the home screen — inside pages just show `esc`.
   const baseHints: Array<[string, string]> =
     phase.name === 'genError' ? [['↵', 'try again'], ...HINTS.genError] : HINTS[phase.name]
-  const hints: Array<[string, string]> = [...baseHints, ['^c', 'quit']]
+  const hints: Array<[string, string]> =
+    phase.name === 'list' ? [...baseHints, ['^c', 'quit']] : baseHints
 
   // --- Render ---------------------------------------------------------------
   // Below this the fixed-width pieces (borders, padding, progress bar) can't
