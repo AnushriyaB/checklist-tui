@@ -375,8 +375,10 @@ function AppInner({initialGoal}: {initialGoal?: string}) {
   }, {isActive: Boolean(process.stdin.isTTY)}) // no raw-mode crash when piped / non-TTY
 
   // --- Footer hints ---------------------------------------------------------
-  const hints: Array<[string, string]> =
+  // `esc` + `^c quit` get routed to their own box on the right by <Shortcuts>.
+  const baseHints: Array<[string, string]> =
     phase.name === 'genError' ? [['↵', 'try again'], ...HINTS.genError] : HINTS[phase.name]
+  const hints: Array<[string, string]> = [...baseHints, ['^c', 'quit']]
 
   // --- Render ---------------------------------------------------------------
   // Below this the fixed-width pieces (borders, padding, progress bar) can't

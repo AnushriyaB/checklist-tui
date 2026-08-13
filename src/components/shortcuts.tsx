@@ -32,29 +32,21 @@ function Card({items, bg}: {items: Hint[]; bg?: string}) {
 }
 
 /**
- * Three-card footer: `move` on the left, `quit` on the right, everything else
- * in a centered card between them — row-flexed across the content width.
+ * Two-box footer on the right: the primary commands in one card, then `esc` +
+ * `^c quit` in a separate card of their own (rightmost).
  */
 export function Shortcuts({items}: {items: Hint[]}) {
   const theme = useTheme()
   const bg = theme.barBg
   const width = contentWidth(useColumns())
 
-  const left = items.filter(([k]) => k === '↑↓')
-  const right = items.filter(([k]) => k === '^c')
-  const middle = items.filter(([k]) => k !== '↑↓' && k !== '^c')
+  const exits = items.filter(([k]) => k === 'esc' || k === '^c')
+  const rest = items.filter(([k]) => k !== 'esc' && k !== '^c')
 
   return (
-    <Box width={width}>
-      <Box flexShrink={0}>
-        <Card items={left} bg={bg} />
-      </Box>
-      <Box flexGrow={1} flexShrink={1} minWidth={0} justifyContent="center">
-        <Card items={middle} bg={bg} />
-      </Box>
-      <Box flexShrink={0}>
-        <Card items={right} bg={bg} />
-      </Box>
+    <Box width={width} justifyContent="flex-end" columnGap={2}>
+      <Card items={rest} bg={bg} />
+      <Card items={exits} bg={bg} />
     </Box>
   )
 }
