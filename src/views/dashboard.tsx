@@ -15,7 +15,7 @@ export function Dashboard({checklists, listCursor, width, showBar}: Props) {
       <Box flexDirection="column">
         <Text color={theme.muted} dimColor={theme.dimMuted}>No checklists yet.</Text>
         <Text color={theme.muted} dimColor={theme.dimMuted}>
-          Press <Text color={theme.accent} bold>g</Text> to generate one with AI, or{' '}
+          Press <Text color={theme.accent} bold>g</Text> to generate one, or{' '}
           <Text color={theme.accent} bold>n</Text> to add one yourself.
         </Text>
       </Box>

@@ -1,4 +1,541 @@
 <!doctype html>
-<meta charset="utf-8" />
-<title>checklist-tui</title>
-<p>This is the generate API for <a href="https://github.com/AnushriyaB/checklist-tui">checklist-tui</a>. Run the app in your terminal.</p>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Checklist</title>
+  <meta name="description" content="A checklist app for your terminal." />
+  <meta property="og:title" content="Checklist" />
+  <meta property="og:description" content="A checklist app for your terminal." />
+  <meta property="og:url" content="https://checklist-tui.vercel.app" />
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+  <style>
+    :root {
+      --white: #ffffff;
+      --text: #18181b;
+      --muted: #71717a;
+      --blue: #3b5bdb;
+      --red: #dc2626;
+      --line: color-mix(in srgb, var(--blue) 16%, transparent);
+      --cell: 40px;
+      --ease: cubic-bezier(0.2, 0, 0, 1);
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    html {
+      -webkit-font-smoothing: antialiased;
+      -moz-osx-font-smoothing: grayscale;
+    }
+
+    html, body {
+      height: 100%;
+      overflow: hidden;
+    }
+
+    body {
+      display: flex;
+      flex-direction: column;
+      background: var(--blue);
+      color: var(--text);
+      font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+      font-size: 16px;
+      line-height: 1.5;
+    }
+
+    .grid {
+      position: fixed;
+      inset: 0;
+      z-index: 0;
+      display: grid;
+      overflow: hidden;
+      background: var(--blue);
+      pointer-events: auto;
+      touch-action: none;
+      user-select: none;
+    }
+
+    .cell {
+      border-right: 1px solid color-mix(in srgb, var(--text) 4%, transparent);
+      border-bottom: 1px solid color-mix(in srgb, var(--text) 4%, transparent);
+      border-radius: 0;
+      background: var(--white);
+      transition-property: border-radius;
+      transition-duration: 180ms;
+      transition-timing-function: var(--ease);
+    }
+
+    .cell:hover,
+    .cell.on {
+      border-radius: 4px;
+    }
+
+    .stage {
+      position: relative;
+      z-index: 2;
+      height: 100dvh;
+      display: flex;
+      flex-direction: column;
+      pointer-events: none;
+    }
+
+    .row {
+      width: min(32rem, calc(100% - 3rem));
+      height: 100%;
+      margin: 0 auto;
+      display: flex;
+      align-items: center;
+      pointer-events: auto;
+    }
+
+    .sheet {
+      flex-shrink: 0;
+      width: 100%;
+      padding: 8px 0 16px;
+      background: var(--white);
+      pointer-events: auto;
+    }
+
+    .mast {
+      display: flex;
+      align-items: center;
+      height: calc(var(--cell) + 8px);
+    }
+
+    .mast .row {
+      justify-content: space-between;
+      gap: 0.75rem;
+    }
+
+    .cluster {
+      width: min(32rem, calc(100% - 3rem));
+      margin: 0 auto;
+    }
+
+    h1 {
+      font-size: 1.25rem;
+      font-weight: 600;
+      letter-spacing: -0.03em;
+      line-height: 1.2;
+      white-space: nowrap;
+    }
+
+    .mark {
+      margin-right: 0.28em;
+    }
+
+    .br {
+      color: var(--muted);
+      font-weight: 400;
+    }
+
+    .check {
+      color: var(--blue);
+      font-weight: 700;
+      margin: 0 0.04em;
+    }
+
+    .lede {
+      margin: 0;
+      color: var(--muted);
+      font-size: 0.8125rem;
+      line-height: 1.2;
+      white-space: nowrap;
+    }
+
+    .bar {
+      display: flex;
+      align-items: stretch;
+      width: 100%;
+      height: var(--cell);
+      overflow: hidden;
+      border-radius: 2px;
+      background: color-mix(in srgb, var(--text) 3.5%, var(--white));
+    }
+
+    .install,
+    .go {
+      display: flex;
+      align-items: center;
+      color: var(--blue);
+    }
+
+    .go {
+      border: none;
+      background: color-mix(in srgb, var(--blue) 9%, color-mix(in srgb, var(--text) 3.5%, var(--white)));
+      text-decoration: none;
+      cursor: pointer;
+      border-radius: 0;
+      transition-property: background;
+      transition-duration: 160ms;
+      transition-timing-function: var(--ease);
+    }
+
+    .go:hover {
+      background: color-mix(in srgb, var(--blue) 16%, color-mix(in srgb, var(--text) 3.5%, var(--white)));
+      border: none;
+    }
+
+    .go:focus-visible {
+      outline: 2px solid var(--blue);
+      outline-offset: -2px;
+    }
+
+    .install {
+      flex: 1;
+      min-width: 0;
+      padding: 0.28rem 0.7rem;
+      font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+      font-size: 0.75rem;
+      line-height: 1.35;
+      text-align: left;
+      overflow-wrap: anywhere;
+    }
+
+    .go {
+      flex-shrink: 0;
+      gap: 0.35em;
+      padding: 0.28rem 0.7rem;
+      font-weight: 600;
+      font-size: 0.8125rem;
+      letter-spacing: -0.01em;
+      box-shadow: inset 1px 0 0 var(--line);
+    }
+
+    .go .arrow {
+      display: inline-block;
+      transition-property: transform;
+      transition-duration: 160ms;
+      transition-timing-function: var(--ease);
+    }
+
+    .go:hover .arrow { transform: translateX(4px); }
+    .go:active { transform: scale(0.96); }
+
+    .demo {
+      margin-top: 0.45rem;
+      width: 100%;
+      height: var(--cell);
+      padding: 0 0.7rem;
+      display: flex;
+      align-items: center;
+      font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+      font-size: 0.75rem;
+      line-height: 1.35;
+      color: var(--text);
+      background: color-mix(in srgb, var(--text) 3.5%, var(--white));
+      border-radius: 2px;
+    }
+
+    .demo .cmd { color: var(--blue); }
+    .demo .arg { white-space: pre; }
+
+    .caret {
+      display: inline-block;
+      width: 1.5px;
+      height: 0.85em;
+      margin: 0 1px -0.1em;
+      background: var(--blue);
+      vertical-align: -0.05em;
+    }
+
+    .caret.on {
+      animation: blink 1.05s steps(1) infinite;
+    }
+
+    .by {
+      position: fixed;
+      top: 0;
+      right: 0;
+      z-index: 3;
+      display: flex;
+      align-items: center;
+      gap: 0.45em;
+      height: var(--cell);
+      padding: 0 0.85rem;
+      color: var(--muted);
+      font-size: 0.8125rem;
+      line-height: 1;
+      white-space: nowrap;
+      pointer-events: auto;
+    }
+
+    .by a {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.2em;
+      color: var(--muted);
+      text-decoration: none;
+      transition-property: color;
+      transition-duration: 160ms;
+      transition-timing-function: var(--ease);
+    }
+
+    .by a:hover,
+    .by a:focus-visible { color: var(--red); }
+    .by a:focus-visible {
+      outline: 2px solid var(--red);
+      outline-offset: 3px;
+    }
+
+    .flower {
+      display: block;
+      width: 0.85em;
+      height: 0.85em;
+      flex-shrink: 0;
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      .cell {
+        transition: none;
+      }
+    }
+
+    @media (prefers-reduced-motion: no-preference) {
+      .in {
+        animation: rise 420ms var(--ease) both;
+      }
+      .in-2 { animation-delay: 80ms; }
+      .in-3 { animation-delay: 160ms; }
+      .in-4 { animation-delay: 240ms; }
+    }
+
+    @keyframes rise {
+      from { opacity: 0; }
+      to { opacity: 1; }
+    }
+
+    @keyframes blink {
+      50% { opacity: 0; }
+    }
+
+    .burst {
+      position: fixed;
+      z-index: 40;
+      width: 32px;
+      height: 32px;
+      margin: -16px 0 0 -16px;
+      color: var(--blue);
+      pointer-events: none;
+      filter: drop-shadow(0 1px 1px color-mix(in srgb, var(--blue) 28%, transparent));
+      animation: burst-fly 900ms cubic-bezier(0.16, 1, 0.3, 1) forwards;
+    }
+
+    .burst path {
+      fill: none;
+      stroke: currentColor;
+      stroke-width: 2.8;
+      stroke-linecap: round;
+      stroke-linejoin: round;
+      stroke-dasharray: 28;
+      stroke-dashoffset: 28;
+      animation: burst-tick 240ms var(--ease) forwards;
+    }
+
+    @keyframes burst-tick {
+      to { stroke-dashoffset: 0; }
+    }
+
+    @keyframes burst-fly {
+      0% {
+        opacity: 0;
+        transform: translateY(6px) scale(0.35);
+      }
+      16% {
+        opacity: 1;
+        transform: translateY(0) scale(1.22);
+      }
+      28% {
+        opacity: 1;
+        transform: translateY(0) scale(1);
+      }
+      100% {
+        opacity: 0;
+        transform: translateY(-72px) scale(0.88);
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="grid" id="grid" aria-hidden="true"></div>
+  <div class="stage">
+    <div class="sheet">
+      <div class="mast in">
+        <div class="row">
+          <h1><span class="mark" aria-hidden="true"><span class="br">[</span><span class="check">✓</span><span class="br">]</span></span>Checklist</h1>
+          <p class="lede">A checklist app for your terminal.</p>
+        </div>
+      </div>
+      <div class="cluster">
+        <div class="bar in in-3">
+          <span class="install">npm install -g github:AnushriyaB/checklist-tui</span>
+          <a class="go" href="https://github.com/AnushriyaB/checklist-tui" target="_blank" rel="noopener noreferrer">Github <span class="arrow" aria-hidden="true">→</span></a>
+        </div>
+        <p class="demo in in-3" aria-live="polite">
+          <span class="cmd">checklist</span><span class="arg"> "<span id="typed"></span><span class="caret" id="caret" aria-hidden="true"></span>"</span>
+        </p>
+      </div>
+    </div>
+    <p class="by in in-4">
+      Built by <a href="https://anushriya.com" target="_blank" rel="noopener noreferrer">
+      <svg class="flower" viewBox="-0.4 -0.2 10.8 10.4" aria-hidden="true">
+        <path fill="currentColor" d="M4.93679 4.26023C4.75481 4.26023 4.58028 4.32623 4.4516 4.44372C4.32292 4.56122 4.25063 4.72057 4.25063 4.88673C4.25063 5.05289 4.32292 5.21224 4.4516 5.32973C4.58028 5.44723 4.75481 5.51323 4.93679 5.51323C5.11877 5.51323 5.2933 5.44723 5.42198 5.32973C5.55066 5.21224 5.62295 5.05289 5.62295 4.88673C5.62295 4.72057 5.55066 4.56122 5.42198 4.44372C5.2933 4.32623 5.11877 4.26023 4.93679 4.26023ZM6.85585 1.80934C6.85365 1.84693 6.84706 1.88553 6.84102 1.92462C6.89592 1.88486 6.95191 1.84961 7.009 1.81887L7.09518 1.77626C7.99487 1.35776 9.11743 1.67452 9.61916 2.46792L9.66527 2.54611C10.1039 3.32949 9.83324 4.32438 9.01369 4.81055L8.93025 4.85716C8.8717 4.88656 8.81003 4.91313 8.74526 4.93685C8.8104 4.9599 8.87206 4.98647 8.93025 5.01654L9.01369 5.06315C9.83324 5.54932 10.1039 6.54471 9.66527 7.32759L9.61916 7.40527C9.11743 8.19918 7.99433 8.51594 7.09518 8.09744L7.00845 8.05433C6.95029 8.0221 6.89438 7.98662 6.84102 7.94808C6.85164 8.01156 6.85731 8.07371 6.85804 8.13452L6.8553 8.22374C6.80315 9.14445 5.94133 9.8737 4.93679 9.8737C3.93225 9.8737 3.07098 9.14445 3.01828 8.22374L3.01554 8.13452C3.0159 8.07371 3.02139 8.01156 3.032 7.94808C2.9987 7.97314 2.96467 7.99653 2.9299 8.01824L2.86513 8.05433C1.98026 8.52045 0.84562 8.24328 0.304925 7.48045L0.254423 7.40527C-0.263766 6.58631 0.0310089 5.49769 0.943878 5.01654L1.01085 4.98296C1.04817 4.96625 1.08733 4.95088 1.12832 4.93685C1.08851 4.92271 1.04933 4.90716 1.01085 4.89024L0.943878 4.85716C0.0310089 4.376 -0.263766 3.28789 0.254423 2.46842L0.304925 2.39324C0.84562 1.63041 1.98081 1.35275 2.86513 1.81887L2.9299 1.85545C2.96467 1.87717 2.9987 1.90023 3.032 1.92462C3.02233 1.86317 3.01683 1.80124 3.01554 1.73917C3.01554 0.776865 3.90041 0 4.93679 0L5.0334 0.00250607C6.02696 0.0491179 6.85804 0.806937 6.85804 1.73968L6.85585 1.80934Z"/>
+      </svg>
+      Anushriya
+    </a>
+    </p>
+  </div>
+  <script>
+    const notes = [
+      'SF in 48 hours',
+      'design a dark mode',
+      'keep my succulents alive',
+      'case study this sprint',
+      'start a sourdough',
+      '12-person Friendsgiving',
+    ]
+    const typed = document.getElementById('typed')
+    const caret = document.getElementById('caret')
+    const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms))
+
+    async function typeNote(note) {
+      caret.classList.remove('on')
+      for (const char of note) {
+        typed.textContent += char
+        await wait(48)
+      }
+      caret.classList.add('on')
+      await wait(4000)
+      caret.classList.remove('on')
+      while (typed.textContent) {
+        typed.textContent = typed.textContent.slice(0, -1)
+        await wait(22)
+      }
+    }
+
+    async function loop() {
+      let i = 0
+      while (true) {
+        await typeNote(notes[i % notes.length])
+        i += 1
+      }
+    }
+
+    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+      typed.textContent = notes[0]
+      caret.classList.add('on')
+    } else {
+      loop()
+    }
+
+    const CELL = 40
+    const grid = document.getElementById('grid')
+
+    function paintGrid() {
+      const cols = Math.ceil(window.innerWidth / CELL) + 1
+      const rows = Math.ceil(window.innerHeight / CELL) + 1
+      const n = cols * rows
+      grid.style.gridTemplateColumns = `repeat(${cols}, ${CELL}px)`
+      grid.style.gridTemplateRows = `repeat(${rows}, ${CELL}px)`
+      while (grid.childElementCount < n) {
+        const cell = document.createElement('span')
+        cell.className = 'cell'
+        grid.append(cell)
+      }
+      while (grid.childElementCount > n) grid.lastElementChild.remove()
+    }
+
+    function placeOnGrid() {
+      const h = window.innerHeight
+      const stage = document.querySelector('.stage')
+      stage.style.height = `${h}px`
+      const total = Math.floor(h / CELL)
+      const start = Math.max(1, Math.floor((total - 6) / 2))
+      stage.style.paddingTop = `${start * CELL}px`
+    }
+
+    paintGrid()
+    placeOnGrid()
+    window.addEventListener('resize', () => {
+      paintGrid()
+      placeOnGrid()
+    })
+
+    function spawnCheck(x, y) {
+      if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return
+      const mark = document.createElement('span')
+      mark.className = 'burst'
+      mark.setAttribute('aria-hidden', 'true')
+      mark.style.left = x + 'px'
+      mark.style.top = y + 'px'
+      mark.innerHTML = '<svg viewBox="0 0 24 24"><path d="M5 12.5l5 5 9-11"/></svg>'
+      document.body.append(mark)
+      mark.addEventListener('animationend', (e) => {
+        if (e.animationName === 'burst-fly') mark.remove()
+      })
+    }
+
+    function overContent(x, y) {
+      const el = document.elementFromPoint(x, y)
+      return Boolean(el && el.closest('.sheet, .by, a'))
+    }
+
+    function cellAt(x, y) {
+      if (overContent(x, y)) return null
+      const col = Math.floor(x / CELL)
+      const row = Math.floor(y / CELL)
+      if (col < 0 || row < 0) return null
+      const cols = Math.ceil(window.innerWidth / CELL) + 1
+      return grid.children[row * cols + col] || null
+    }
+
+    function stamp(cell) {
+      if (!cell || cell.dataset.hit) return
+      cell.dataset.hit = '1'
+      cell.classList.add('on')
+      const box = cell.getBoundingClientRect()
+      spawnCheck(box.left + box.width / 2, box.top + box.height / 2)
+    }
+
+    function stampLine(x0, y0, x1, y1) {
+      const dist = Math.hypot(x1 - x0, y1 - y0)
+      const steps = Math.max(1, Math.ceil(dist / (CELL / 2)))
+      for (let i = 0; i <= steps; i++) {
+        const t = i / steps
+        stamp(cellAt(x0 + (x1 - x0) * t, y0 + (y1 - y0) * t))
+      }
+    }
+
+    let drawing = false
+    let lastX = 0
+    let lastY = 0
+
+    function stopDraw(event) {
+      if (!drawing) return
+      drawing = false
+      grid.releasePointerCapture?.(event.pointerId)
+      for (const cell of grid.querySelectorAll('.cell[data-hit]')) delete cell.dataset.hit
+    }
+
+    grid.addEventListener('pointerdown', (event) => {
+      if (event.button !== 0) return
+      event.preventDefault()
+      drawing = true
+      lastX = event.clientX
+      lastY = event.clientY
+      grid.setPointerCapture(event.pointerId)
+      stamp(cellAt(lastX, lastY))
+    })
+
+    grid.addEventListener('pointermove', (event) => {
+      if (!drawing) return
+      stampLine(lastX, lastY, event.clientX, event.clientY)
+      lastX = event.clientX
+      lastY = event.clientY
+    })
+
+    grid.addEventListener('pointerup', stopDraw)
+    grid.addEventListener('pointercancel', stopDraw)
+  </script>
+</body>
+</html>

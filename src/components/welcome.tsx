@@ -3,7 +3,7 @@ import {Box, Text} from 'ink'
 import {useTheme} from '../theme'
 
 const TITLE = 'Checklist'
-const DESC = 'Turn any goal into a checkable plan — saved locally, no account.'
+const DESC = 'A checklist app for your terminal.'
 
 /** Wordmark: one check + "Checklist". Same header on every screen. */
 export function Logo() {

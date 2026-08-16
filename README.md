@@ -1,6 +1,6 @@
 # checklist-tui
 
-Type a goal. Get a checklist. Check things off in the terminal.
+Write a note. Get a checklist. Check things off in the terminal.
 
 Saved locally. No account. No API key.
 

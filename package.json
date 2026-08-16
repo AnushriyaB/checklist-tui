@@ -1,7 +1,7 @@
 {
   "name": "checklist-tui",
   "version": "0.1.0",
-  "description": "A local, keyboard-first checklist manager for your terminal.",
+  "description": "Write a note. Get a checklist. Check things off in the terminal.",
   "keywords": [
     "checklist",
     "todo",

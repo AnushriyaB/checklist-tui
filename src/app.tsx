@@ -454,7 +454,7 @@ function AppInner({initialGoal}: {initialGoal?: string}) {
       {phase.name === 'prompt' && (
         <Box flexDirection="column" width={width}>
           <Text color={theme.text}>What do you want to get done?</Text>
-          <Text color={theme.muted} dimColor={theme.dimMuted}>AI will turn it into a step-by-step checklist.</Text>
+          <Text color={theme.muted} dimColor={theme.dimMuted}>You'll get a step-by-step checklist.</Text>
           <Gap />
           <Box>
             <Text color={theme.accent}>❯ </Text>
