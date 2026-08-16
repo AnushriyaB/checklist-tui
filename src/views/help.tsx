@@ -9,7 +9,7 @@ import {Shortcuts} from '../components/shortcuts'
 const HELP: Array<{heading: string; keys: Array<[string, string]>}> = [
   {heading: 'Dashboard', keys: [['↵', 'open'], ['g', 'generate'], ['n', 'new'], ['d', 'delete']]},
   {heading: 'In a checklist', keys: [['space', 'toggle'], ['a', 'add'], ['e', 'edit'], ['x', 'delete'], ['/', 'filter']]},
-  {heading: 'Anywhere', keys: [['esc', 'back'], ['m', 'sound'], ['^c', 'quit']]},
+  {heading: 'Anywhere', keys: [['?', 'help'], ['esc', 'back'], ['m', 'sound'], ['^c', 'quit']]},
 ]
 
 /** The compact '?' shortcut reference. Full-height so it fully covers the screen

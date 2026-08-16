@@ -2,17 +2,25 @@
 
 Type a goal. Get a checklist. Check things off in the terminal.
 
-Saved locally at `~/.config/checklist/data.json`. No account. No API key.
+Saved locally. No account. No API key.
 
-## Run
+## Install once
+
+Needs [Node 18+](https://nodejs.org). Then:
 
 ```bash
-git clone https://github.com/AnushriyaB/checklist-tui.git
-cd checklist-tui
-npm install
-npm run dev
+npm install -g github:AnushriyaB/checklist-tui
 ```
 
-Node 18+. Press **?** for keys. Press **g** to generate.
+After that, from **any folder**:
 
-Private. Not open source.
+```bash
+checklist
+checklist "plan a 3-day trip to Lisbon"
+```
+
+Press **?** for keys. Press **g** to generate.
+
+Inspired by [yoinks](https://github.com/pablostanley/yoinks) by Pablo Stanley.
+
+Source is public so you can read it. Not licensed for reuse.
