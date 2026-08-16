@@ -9,6 +9,7 @@ type Props = {
   onTab?: () => void
   placeholder?: string
   focus?: boolean
+  maxLength?: number
 }
 
 const isWord = (c: string | undefined) => !!c && /\w/.test(c)
@@ -33,7 +34,7 @@ function wordRight(value: string, cursor: number): number {
  * be nicer, but terminals don't forward Cmd to programs — Ctrl+A/E is the
  * working equivalent. Renders its own block cursor.
  */
-export function TextField({value, onChange, onSubmit, onTab, placeholder, focus = true}: Props) {
+export function TextField({value, onChange, onSubmit, onTab, placeholder, focus = true, maxLength}: Props) {
   const theme = useTheme()
   const [cursor, setCursor] = useState(value.length)
   const lastEmitted = useRef(value)
@@ -64,13 +65,17 @@ export function TextField({value, onChange, onSubmit, onTab, placeholder, focus 
       if (key.ctrl && input === 'e') return void setCursor(value.length) // line end
       if (key.meta && input === 'b') return void setCursor(wordLeft(value, c)) // Option-b
       if (key.meta && input === 'f') return void setCursor(wordRight(value, c)) // Option-f
-      if (key.return) return void onSubmit?.(value)
+      if (key.return) {
+        if (maxLength != null && value.length > maxLength) return
+        return void onSubmit?.(value)
+      }
       if (key.tab) return void onTab?.()
       if (key.backspace || key.delete) {
         if (c > 0) emit(value.slice(0, c - 1) + value.slice(c), c - 1)
         return
       }
-      // Printable insert.
+      // Printable insert. maxLength is a warning, not a hard stop — the
+      // counter turns red and submit is blocked, so people can paste then trim.
       if (input && !key.ctrl && !key.meta && !key.escape) {
         emit(value.slice(0, c) + input + value.slice(c), c + input.length)
       }

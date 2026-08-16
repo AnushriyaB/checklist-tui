@@ -12,6 +12,7 @@ import {DetailView} from './views/detail'
 import {generateChecklist, GenerationError, type GenErrorCode} from './lib/ai'
 import {play, soundAvailable} from './lib/sound'
 import {truncate} from './lib/text'
+import {MAX_GOAL} from './lib/limits'
 import {ThemeProvider, useTheme} from './theme'
 import {
   loadChecklists,
@@ -222,6 +223,11 @@ function AppInner({initialGoal}: {initialGoal?: string}) {
   // Run a generation. On success, save the checklist and open it; on failure,
   // land on a friendly error screen carrying the goal so retry re-runs it.
   const startGenerate = (goal: string) => {
+    if (goal.length > MAX_GOAL) {
+      setDraft(goal)
+      setPhase({name: 'prompt'})
+      return
+    }
     const controller = new AbortController()
     genAbort.current = controller
     setPhase({name: 'generating', goal})
@@ -456,9 +462,10 @@ function AppInner({initialGoal}: {initialGoal?: string}) {
               <TextField
                 value={draft}
                 onChange={setDraft}
+                maxLength={MAX_GOAL}
                 onSubmit={value => {
                   const goal = value.trim()
-                  if (goal) startGenerate(goal)
+                  if (goal && goal.length <= MAX_GOAL) startGenerate(goal)
                 }}
                 placeholder={SUGGESTIONS[suggestionIndex]}
               />
@@ -468,6 +475,14 @@ function AppInner({initialGoal}: {initialGoal?: string}) {
                 <Text color={theme.muted} dimColor={theme.dimMuted}>⇥ tab</Text>
               </Box>
             ) : null}
+          </Box>
+          <Box flexShrink={0}>
+            <Text
+              color={draft.length > MAX_GOAL ? (theme.danger ?? 'red') : theme.muted}
+              dimColor={draft.length <= MAX_GOAL && theme.dimMuted}
+            >
+              {`${String(draft.length).padStart(String(MAX_GOAL).length)}/${MAX_GOAL}`}
+            </Text>
           </Box>
         </Box>
       )}

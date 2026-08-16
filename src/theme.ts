@@ -9,6 +9,8 @@ export type Theme = {
   accent?: string
   text?: string
   muted?: string
+  /** Over-limit / error. Undefined in `auto` so we fall back to ANSI red. */
+  danger?: string
   /** When true, render muted text via ANSI `dim` instead of a hex colour. */
   dimMuted: boolean
   /**
@@ -23,9 +25,9 @@ export type Theme = {
 // whether a terminal is light or dark is unreliable, and ANSI defaults already
 // match it. `dark`/`light` pin exact colours for people who want them.
 const themes: Record<ThemeMode, Theme> = {
-  auto: {mode: 'auto', accent: undefined, text: undefined, muted: undefined, dimMuted: true, barBg: undefined},
-  dark: {mode: 'dark', accent: '#8aa2ff', text: '#f4f4f5', muted: '#a1a1aa', dimMuted: false, barBg: '#242429'},
-  light: {mode: 'light', accent: '#3b5bdb', text: '#18181b', muted: '#52525b', dimMuted: false, barBg: '#ededf0'},
+  auto: {mode: 'auto', accent: undefined, text: undefined, muted: undefined, danger: undefined, dimMuted: true, barBg: undefined},
+  dark: {mode: 'dark', accent: '#8aa2ff', text: '#f4f4f5', muted: '#a1a1aa', danger: '#f87171', dimMuted: false, barBg: '#242429'},
+  light: {mode: 'light', accent: '#3b5bdb', text: '#18181b', muted: '#52525b', danger: '#e03131', dimMuted: false, barBg: '#ededf0'},
 }
 
 const ThemeContext = createContext<Theme>(themes.auto)

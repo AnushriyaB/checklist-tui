@@ -5,6 +5,7 @@ declare const process: {env: Record<string, string | undefined>}
 
 const OPENROUTER_URL = 'https://openrouter.ai/api/v1/chat/completions'
 const MODEL = 'x-ai/grok-4.6'
+// Keep in sync with src/lib/limits.ts — the TUI counter uses the same cap.
 const MAX_GOAL = 400
 const RATE_MAX = 10
 const RATE_WINDOW_MS = 60 * 60 * 1000
