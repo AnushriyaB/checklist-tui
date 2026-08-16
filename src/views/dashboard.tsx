@@ -6,7 +6,7 @@ import {truncate} from '../lib/text'
 
 type Props = {checklists: Checklist[]; listCursor: number; width: number; showBar: boolean}
 
-/** The home list: one tight filled row per checklist (selected row highlighted). */
+/** Home list: selected row is the blue arrow + blue title. No fill, no box. */
 export function Dashboard({checklists, listCursor, width, showBar}: Props) {
   const theme = useTheme()
 
@@ -22,12 +22,11 @@ export function Dashboard({checklists, listCursor, width, showBar}: Props) {
     )
   }
 
-  // Fixed count column (widest count wins) so every bar starts at the same x.
   const countW = Math.max(3, ...checklists.map(c => {
     const {done, total} = progress(c)
     return `${done}/${total}`.length
   }))
-  const numW = String(checklists.length).length // "1." … "12." aligned
+  const numW = String(checklists.length).length
   const titleW = Math.max(4, width - 3 - (numW + 2) - (showBar ? 11 : 0) - countW)
 
   return (
@@ -35,37 +34,34 @@ export function Dashboard({checklists, listCursor, width, showBar}: Props) {
       {checklists.map((c, i) => {
         const {done, total} = progress(c)
         const selected = i === listCursor
-        // One Text per row so the selection fill is continuous (Ink 5 can't
-        // background a Box); widths are padded by hand.
-        const bg = selected ? theme.barBg : undefined
         const countStr = `${done}/${total}`.padStart(countW)
         const barW = showBar ? 10 : 0
         const title = truncate(c.title, titleW).padEnd(titleW)
         const filled = total > 0 ? Math.round((done / total) * barW) : 0
         const complete = total > 0 && done === total
+        const titleColor = selected ? theme.accent : theme.text
         return (
-          <Box key={c.id} width={width}>
-            <Text backgroundColor={bg} wrap="truncate-end">
-              <Text backgroundColor={bg} color={theme.accent} bold>{selected ? '❯ ' : '  '}</Text>
-              <Text backgroundColor={bg} color={theme.muted} dimColor={theme.dimMuted}>{`${i + 1}`.padStart(numW) + '. '}</Text>
-              <Text backgroundColor={bg} color={theme.text} bold={selected}>{title}</Text>
-              <Text backgroundColor={bg}> </Text>
+          <Box key={c.id} width={width} flexShrink={0}>
+            <Text>
+              <Text color={theme.accent} bold>{selected ? '❯ ' : '  '}</Text>
+              <Text color={theme.muted} dimColor={theme.dimMuted}>{`${i + 1}`.padStart(numW) + '. '}</Text>
+              <Text color={titleColor} bold={selected}>{title}</Text>
+              <Text> </Text>
               {showBar ? (
                 complete ? (
-                  // Done: replace the bar with "Completed".
                   <Text>
-                    <Text backgroundColor={bg} color={theme.accent} bold>{'Completed'.padEnd(barW)}</Text>
-                    <Text backgroundColor={bg}> </Text>
+                    <Text color={theme.accent} bold>{'Completed'.padEnd(barW)}</Text>
+                    <Text> </Text>
                   </Text>
                 ) : (
                   <Text>
-                    <Text backgroundColor={bg} color={theme.text}>{'█'.repeat(filled)}</Text>
-                    <Text backgroundColor={bg} color={theme.muted} dimColor={theme.dimMuted}>{'░'.repeat(barW - filled)}</Text>
-                    <Text backgroundColor={bg}> </Text>
+                    <Text color={selected ? theme.accent : theme.text}>{'█'.repeat(filled)}</Text>
+                    <Text color={theme.muted} dimColor={theme.dimMuted}>{'░'.repeat(barW - filled)}</Text>
+                    <Text> </Text>
                   </Text>
                 )
               ) : null}
-              <Text backgroundColor={bg} color={complete ? theme.accent : theme.muted} dimColor={!complete && theme.dimMuted}>
+              <Text color={complete || selected ? theme.accent : theme.muted} dimColor={!complete && !selected && theme.dimMuted}>
                 {countStr}
               </Text>
             </Text>
