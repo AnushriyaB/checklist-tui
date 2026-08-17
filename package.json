@@ -1,6 +1,6 @@
 {
   "name": "checklist-tui",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Write a note. Get a checklist. Check things off in the terminal.",
   "keywords": [
     "checklist",
@@ -22,10 +22,12 @@
     "url": "https://github.com/AnushriyaB/checklist-tui/issues"
   },
   "bin": {
-    "checklist": "dist/cli.js"
+    "checklist": "dist/cli.js",
+    "checklist-tui": "dist/cli.js"
   },
   "files": [
-    "dist"
+    "dist",
+    "scripts/postinstall.js"
   ],
   "engines": {
     "node": ">=18"
@@ -34,7 +36,8 @@
     "dev": "tsx src/cli.tsx",
     "typecheck": "tsc --noEmit",
     "build": "tsup",
-    "prepublishOnly": "npm run build"
+    "prepublishOnly": "npm run build",
+    "postinstall": "node scripts/postinstall.js"
   },
   "dependencies": {
     "ink": "^5.0.1",

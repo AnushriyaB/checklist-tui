@@ -2,6 +2,9 @@
 
 // src/cli.tsx
 import React13 from "react";
+import { readFileSync } from "fs";
+import { dirname, join } from "path";
+import { fileURLToPath } from "url";
 import { render } from "ink";
 
 // src/app.tsx
@@ -849,6 +852,23 @@ function AppInner({ initialGoal: initialGoal2 }) {
 }
 
 // src/cli.tsx
+var flag = process.argv[2];
+if (flag === "-h" || flag === "--help") {
+  process.stdout.write(
+    '\n  A checklist app for your terminal.\n\n    checklist\n    checklist "plan a 3-day trip to Lisbon"\n\n'
+  );
+  process.exit(0);
+}
+if (flag === "-v" || flag === "--version") {
+  try {
+    const pkg = join(dirname(fileURLToPath(import.meta.url)), "..", "package.json");
+    process.stdout.write(`${JSON.parse(readFileSync(pkg, "utf8")).version}
+`);
+  } catch {
+    process.stdout.write("0.1.1\n");
+  }
+  process.exit(0);
+}
 var ESC = String.fromCharCode(27);
 var isTTY = Boolean(process.stdout.isTTY);
 var cleaned = false;
