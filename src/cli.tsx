@@ -11,7 +11,7 @@ if (flag === '-h' || flag === '--help') {
   process.stdout.write(
     '\n  A checklist app for your terminal.\n' +
     '\n    checklist\n' +
-    '    checklist "plan a 3-day trip to Lisbon"\n\n',
+    '    checklist "trip to sf for 10 days"\n\n',
   )
   process.exit(0)
 }
@@ -20,7 +20,7 @@ if (flag === '-v' || flag === '--version') {
     const pkg = join(dirname(fileURLToPath(import.meta.url)), '..', 'package.json')
     process.stdout.write(`${JSON.parse(readFileSync(pkg, 'utf8')).version}\n`)
   } catch {
-    process.stdout.write('0.1.1\n')
+    process.stdout.write('0.1.2\n')
   }
   process.exit(0)
 }
