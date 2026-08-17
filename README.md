@@ -16,7 +16,7 @@ After that, from **any folder**:
 
 ```bash
 checklist
-checklist "plan a 3-day trip to Lisbon"
+checklist "trip to sf for 10 days"
 ```
 
 Press **?** for keys. Press **g** to generate.

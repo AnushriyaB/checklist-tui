@@ -1,6 +1,6 @@
 {
   "name": "checklist-tui",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "Write a note. Get a checklist. Check things off in the terminal.",
   "keywords": [
     "checklist",
