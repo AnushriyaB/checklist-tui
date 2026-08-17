@@ -1,12 +1,12 @@
 #!/usr/bin/env node
-import {execFileSync, spawn} from 'node:child_process'
+import {execFileSync, spawn, spawnSync} from 'node:child_process'
 import fs from 'node:fs'
 import path from 'node:path'
 import {fileURLToPath} from 'node:url'
 
 const self = fileURLToPath(import.meta.url)
-const cli = path.join(path.dirname(self), '..', 'dist', 'cli.js')
-const ttyFile = process.platform === 'win32' ? '\\\\.\\CON' : '/dev/tty'
+const root = path.join(path.dirname(self), '..')
+const cli = path.join(root, 'dist', 'cli.js')
 
 function banner() {
   const color = !process.env.NO_COLOR
@@ -20,57 +20,111 @@ function banner() {
   )
 }
 
-function npmStillRunning(pid) {
+function sleep(ms) {
+  Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms)
+}
+
+function psCol(pid, col) {
   try {
-    const cmd = execFileSync('ps', ['-p', String(pid), '-o', 'command='], {
+    return execFileSync('ps', ['-p', String(pid), '-o', `${col}=`], {
       encoding: 'utf8',
       stdio: ['ignore', 'pipe', 'ignore'],
-    })
-    return /\bnpm\b/.test(cmd)
+    }).trim()
+  } catch {
+    return ''
+  }
+}
+
+function toDevPath(tty) {
+  if (!tty || tty === '?' || tty === '??') return null
+  if (tty.startsWith('/dev/')) return tty
+  return `/dev/${tty}`
+}
+
+// npm 7+ runs postinstall in the background with no controlling terminal, so
+// `/dev/tty` fails. Walk parents until we find the real pty (the user's shell).
+function findTtyPath() {
+  for (const candidate of ['/dev/tty', process.env.CHECKLIST_TTY]) {
+    if (!candidate) continue
+    try {
+      fs.accessSync(candidate, fs.constants.R_OK | fs.constants.W_OK)
+      return candidate
+    } catch {}
+  }
+  let pid = process.ppid
+  for (let i = 0; i < 16 && pid > 1; i++) {
+    const dev = toDevPath(psCol(pid, 'tty'))
+    if (dev) {
+      try {
+        fs.accessSync(dev, fs.constants.R_OK | fs.constants.W_OK)
+        return dev
+      } catch {}
+    }
+    pid = Number(psCol(pid, 'ppid')) || 0
+  }
+  return null
+}
+
+function isGlobalInstall() {
+  if (process.env.CI) return false
+  if (['true', '1'].includes(String(process.env.npm_config_global))) return true
+  const prefix = process.env.npm_config_prefix
+  if (!prefix) return false
+  try {
+    const here = fs.realpathSync(root)
+    const globalDir = path.join(prefix, 'lib', 'node_modules', 'checklist-tui')
+    return fs.existsSync(globalDir) && fs.realpathSync(globalDir) === here
   } catch {
     return false
   }
 }
 
-function sleep(ms) {
-  Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms)
+function openTty(ttyPath) {
+  try {
+    return fs.openSync(ttyPath, 'r+')
+  } catch {
+    return null
+  }
 }
 
-function greetAndOpen(npmPid) {
-  while (npmStillRunning(npmPid)) sleep(60)
-  // Let npm flush "changed N packages" onto the screen, then wipe it.
-  sleep(150)
-
-  let fd
-  try {
-    fd = fs.openSync(ttyFile, 'r+')
-  } catch {
-    process.exit(0)
-  }
-
+function writeBanner(fd) {
   fs.writeSync(fd, '\x1b[2J\x1b[H')
   fs.writeSync(fd, banner())
+}
 
-  if (!fs.existsSync(cli)) process.exit(0)
+if (process.env.CHECKLIST_AFTER_NPM === '1') {
+  sleep(200)
+  const fd = openTty(process.env.CHECKLIST_TTY)
+  if (fd != null) {
+    writeBanner(fd)
+    fs.closeSync(fd)
+  }
+  process.exit(0)
+}
 
-  const child = spawn(process.execPath, [cli], {
+if (!isGlobalInstall()) process.exit(0)
+
+const ttyPath = findTtyPath()
+if (!ttyPath) process.exit(0)
+const fd = openTty(ttyPath)
+if (fd == null) process.exit(0)
+
+writeBanner(fd)
+
+if (fs.existsSync(cli)) {
+  spawnSync(process.execPath, [cli], {
     stdio: [fd, fd, fd],
     env: process.env,
   })
-  child.on('exit', (code) => process.exit(code ?? 0))
 }
 
-if (process.env.CHECKLIST_WAIT_PPID) {
-  greetAndOpen(Number(process.env.CHECKLIST_WAIT_PPID))
-} else {
-  if (process.env.CI || process.env.npm_config_global !== 'true') process.exit(0)
-  const child = spawn(process.execPath, [self], {
-    detached: true,
-    stdio: 'ignore',
-    env: {
-      ...process.env,
-      CHECKLIST_WAIT_PPID: String(process.ppid),
-    },
-  })
-  child.unref()
-}
+const cleaner = spawn(process.execPath, [self], {
+  detached: true,
+  stdio: 'ignore',
+  env: {
+    ...process.env,
+    CHECKLIST_AFTER_NPM: '1',
+    CHECKLIST_TTY: ttyPath,
+  },
+})
+cleaner.unref()
