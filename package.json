@@ -11,7 +11,7 @@
     "ink"
   ],
   "type": "module",
-  "license": "UNLICENSED",
+  "license": "SEE LICENSE IN LICENSE",
   "author": "AnushriyaB",
   "homepage": "https://github.com/AnushriyaB/checklist-tui#readme",
   "repository": {
@@ -22,7 +22,7 @@
     "url": "https://github.com/AnushriyaB/checklist-tui/issues"
   },
   "bin": {
-    "checklist": "./dist/cli.js"
+    "checklist": "dist/cli.js"
   },
   "files": [
     "dist"
