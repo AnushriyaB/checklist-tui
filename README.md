@@ -6,16 +6,10 @@ Saved locally. No account. No API key.
 
 ## Install once
 
-Needs [Node 18+](https://nodejs.org) and npm. Then:
+Needs [Node 18+](https://nodejs.org). Then:
 
 ```bash
-npm install -g github:AnushriyaB/checklist-tui
-```
-
-If that errors (often a permissions thing on the `-g`), this does the same job without installing globally:
-
-```bash
-npx github:AnushriyaB/checklist-tui
+npm install -g checklist-tui
 ```
 
 After that, from **any folder**:
