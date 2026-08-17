@@ -865,7 +865,7 @@ if (flag === "-v" || flag === "--version") {
     process.stdout.write(`${JSON.parse(readFileSync(pkg, "utf8")).version}
 `);
   } catch {
-    process.stdout.write("0.1.2\n");
+    process.stdout.write("0.1.3\n");
   }
   process.exit(0);
 }

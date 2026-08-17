@@ -20,7 +20,7 @@ if (flag === '-v' || flag === '--version') {
     const pkg = join(dirname(fileURLToPath(import.meta.url)), '..', 'package.json')
     process.stdout.write(`${JSON.parse(readFileSync(pkg, 'utf8')).version}\n`)
   } catch {
-    process.stdout.write('0.1.2\n')
+    process.stdout.write('0.1.3\n')
   }
   process.exit(0)
 }
