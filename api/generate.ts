@@ -92,6 +92,14 @@ function messageText(content: unknown): string {
   return ''
 }
 
+function needsWebSearch(goal: string): boolean {
+  return (
+    /\b(this weekend|today|tonight|tomorrow|this week|hours|price|prices|weather|visa|deadline|deadlines|availability|open now|current|latest)\b/i.test(
+      goal,
+    ) || /\b20(2[5-9]|3\d)\b/.test(goal)
+  )
+}
+
 function json(status: number, body: unknown) {
   return Response.json(body, {status})
 }
@@ -114,6 +122,24 @@ export async function POST(request: Request) {
   if (!goal || goal.length > MAX_GOAL) return json(400, {error: 'bad_request'})
 
   const today = new Date().toISOString().slice(0, 10)
+  const search = needsWebSearch(goal)
+  const payload: Record<string, unknown> = {
+    model: MODEL,
+    messages: [
+      {role: 'system', content: SYSTEM_PROMPT},
+      {role: 'user', content: `${goal}\n\nToday is ${today}.`},
+    ],
+    temperature: 0.5,
+  }
+  if (search) {
+    payload.tools = [
+      {
+        type: 'openrouter:web_search',
+        parameters: {engine: 'native', max_uses: 1},
+      },
+    ]
+  }
+
   let response: Response
   try {
     response = await fetch(OPENROUTER_URL, {
@@ -124,20 +150,7 @@ export async function POST(request: Request) {
         'HTTP-Referer': 'https://github.com/AnushriyaB/checklist-tui',
         'X-Title': 'checklist-tui',
       },
-      body: JSON.stringify({
-        model: MODEL,
-        messages: [
-          {role: 'system', content: SYSTEM_PROMPT},
-          {role: 'user', content: `${goal}\n\nToday is ${today}.`},
-        ],
-        tools: [
-          {
-            type: 'openrouter:web_search',
-            parameters: {engine: 'native', max_uses: 3},
-          },
-        ],
-        temperature: 0.5,
-      }),
+      body: JSON.stringify(payload),
     })
   } catch {
     return json(502, {error: 'upstream'})
