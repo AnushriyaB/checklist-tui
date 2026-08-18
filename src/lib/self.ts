@@ -7,7 +7,8 @@ import os from 'node:os'
 import {DATA_DIR} from '../store'
 
 const PACKAGE = 'checklist-tui'
-const COMMANDS = new Set(['update', 'uninstall', 'unistall'])
+const UPDATE = new Set(['update', 'upgrade'])
+const UNINSTALL = new Set(['uninstall', 'unistall', 'unintall', 'uninstal', 'remove'])
 
 const tty = Boolean(process.stdout.isTTY) && !process.env.NO_COLOR
 const wrap = (code: number, s: string) => (tty ? `\x1b[${code}m${s}\x1b[0m` : s)
@@ -35,7 +36,7 @@ export function packageVersion(): string {
     const pkg = join(dirname(fileURLToPath(import.meta.url)), '..', 'package.json')
     return JSON.parse(readFileSync(pkg, 'utf8')).version as string
   } catch {
-    return '0.1.4'
+    return '0.1.5'
   }
 }
 
@@ -78,6 +79,15 @@ function latestVersion(): string | null {
   if (result.status !== 0) return null
   const version = (result.stdout || '').trim()
   return version || null
+}
+
+function commandName(args: string[]): 'update' | 'uninstall' | null {
+  const raw = args[0]?.toLowerCase()
+  if (!raw) return null
+  const token = raw.replace(/^--?/, '')
+  if (UPDATE.has(token)) return 'update'
+  if (UNINSTALL.has(token)) return 'uninstall'
+  return null
 }
 
 function hasFlag(flags: string[], ...names: string[]) {
@@ -158,14 +168,12 @@ async function uninstall(yes: boolean): Promise<number> {
   return 0
 }
 
-/** Handle `checklist update` / `checklist uninstall`. Extra words are a goal, not a command. */
+/** `update` / `uninstall` always win as the first word — never a generate goal. */
 export async function runSelfCommand(args: string[]): Promise<number | null> {
-  const head = args[0]?.toLowerCase()
-  if (!head || !COMMANDS.has(head)) return null
+  const command = commandName(args)
+  if (!command) return null
   const flags = args.slice(1)
-  if (flags.some(flag => !flag.startsWith('-'))) return null
 
-  const command = head === 'unistall' ? 'uninstall' : head
   if (hasFlag(flags, '-h', '--help')) {
     if (command === 'update') updateHelp()
     else uninstallHelp()

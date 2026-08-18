@@ -12,16 +12,8 @@ Needs [Node 18+](https://nodejs.org). Then:
 npm install -g checklist-tui
 ```
 
-After that, from **any folder**:
-
-```bash
-checklist
-checklist "trip to sf for 10 days"
-checklist update
-checklist uninstall
-```
-
-Press **?** for keys. Press **g** to generate.
+- Terminal: `checklist` · `checklist "…"` · `checklist update` · `checklist uninstall` · `checklist -h` · `checklist -v`
+- App: `↵` open · `g` generate · `n` new · `d` delete · `space` toggle · `a` add · `e` edit · `x` delete · `/` filter · `?` help · `esc` back · `m` sound · `^c` quit
 
 Inspired by [yoinks](https://github.com/pablostanley/yoinks) by Pablo Stanley.
 

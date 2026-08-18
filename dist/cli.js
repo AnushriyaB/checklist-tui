@@ -856,7 +856,8 @@ import { fileURLToPath } from "url";
 import { spawnSync } from "child_process";
 import os2 from "os";
 var PACKAGE = "checklist-tui";
-var COMMANDS = /* @__PURE__ */ new Set(["update", "uninstall", "unistall"]);
+var UPDATE = /* @__PURE__ */ new Set(["update", "upgrade"]);
+var UNINSTALL = /* @__PURE__ */ new Set(["uninstall", "unistall", "unintall", "uninstal", "remove"]);
 var tty = Boolean(process.stdout.isTTY) && !process.env.NO_COLOR;
 var wrap = (code, s) => tty ? `\x1B[${code}m${s}\x1B[0m` : s;
 var blue = (s) => wrap(34, s);
@@ -875,7 +876,7 @@ function packageVersion() {
     const pkg = join(dirname(fileURLToPath(import.meta.url)), "..", "package.json");
     return JSON.parse(readFileSync(pkg, "utf8")).version;
   } catch {
-    return "0.1.4";
+    return "0.1.5";
   }
 }
 function npmBin() {
@@ -911,6 +912,14 @@ function latestVersion() {
   if (result.status !== 0) return null;
   const version = (result.stdout || "").trim();
   return version || null;
+}
+function commandName(args2) {
+  const raw = args2[0]?.toLowerCase();
+  if (!raw) return null;
+  const token = raw.replace(/^--?/, "");
+  if (UPDATE.has(token)) return "update";
+  if (UNINSTALL.has(token)) return "uninstall";
+  return null;
 }
 function hasFlag(flags, ...names) {
   return flags.some((flag2) => names.includes(flag2));
@@ -1002,11 +1011,9 @@ async function uninstall(yes) {
   return 0;
 }
 async function runSelfCommand(args2) {
-  const head = args2[0]?.toLowerCase();
-  if (!head || !COMMANDS.has(head)) return null;
+  const command = commandName(args2);
+  if (!command) return null;
   const flags = args2.slice(1);
-  if (flags.some((flag2) => !flag2.startsWith("-"))) return null;
-  const command = head === "unistall" ? "uninstall" : head;
   if (hasFlag(flags, "-h", "--help")) {
     if (command === "update") updateHelp();
     else uninstallHelp();
