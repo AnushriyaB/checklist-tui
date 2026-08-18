@@ -307,7 +307,7 @@ function AppInner({initialGoal}: {initialGoal?: string}) {
       if (input === 'y') {
         const next = checklists.filter(c => c.id !== phase.id)
         persist(next)
-        setListCursor(c => Math.max(0, Math.min(c, next.length - 1)))
+        setListCursor(c => Math.max(0, Math.min(c, next.length)))
         setPhase({name: 'list'})
       } else if (input === 'n' || key.escape) {
         setPhase({name: 'list'})
@@ -340,13 +340,20 @@ function AppInner({initialGoal}: {initialGoal?: string}) {
     }
 
     if (phase.name === 'list') {
+      const last = checklists.length > 0 ? checklists.length : 0 // extra row: + generate
       if (key.upArrow || input === 'k') setListCursor(c => Math.max(0, c - 1))
-      if (key.downArrow || input === 'j') setListCursor(c => Math.min(checklists.length - 1, c + 1))
-      const current = checklists[listCursor]
-      if (key.return && current) {
-        setTaskFilter('all')
-        setTaskCursor(0)
-        setPhase({name: 'detail', id: current.id})
+      if (key.downArrow || input === 'j') setListCursor(c => Math.min(last, c + 1))
+      const onGenerate = checklists.length > 0 && listCursor === checklists.length
+      const current = onGenerate ? undefined : checklists[listCursor]
+      if (key.return) {
+        if (onGenerate) {
+          setDraft('')
+          setPhase({name: 'prompt'})
+        } else if (current) {
+          setTaskFilter('all')
+          setTaskCursor(0)
+          setPhase({name: 'detail', id: current.id})
+        }
       }
       if (input === 'g') {
         setDraft('')
@@ -400,8 +407,13 @@ function AppInner({initialGoal}: {initialGoal?: string}) {
   // --- Footer hints ---------------------------------------------------------
   // `esc` + `^c quit` get routed to their own group on the right by <Shortcuts>.
   // Quit only shows on the home screen — inside pages just show `esc`.
+  const onGenerateRow = phase.name === 'list' && checklists.length > 0 && listCursor === checklists.length
   const baseHints: Array<[string, string]> =
-    phase.name === 'genError' ? [['↵', 'try again'], ...HINTS.genError] : HINTS[phase.name]
+    phase.name === 'genError'
+      ? [['↵', 'try again'], ...HINTS.genError]
+      : onGenerateRow
+        ? [['↵', 'generate'], ['?', 'help']]
+        : HINTS[phase.name]
   const hints: Array<[string, string]> =
     phase.name === 'list' ? [...baseHints, ['^c', 'quit']] : baseHints
 

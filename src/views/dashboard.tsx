@@ -3,10 +3,11 @@ import {Box, Text} from 'ink'
 import {useTheme} from '../theme'
 import {progress, type Checklist} from '../store'
 import {truncate} from '../lib/text'
+import {Gap} from '../components/screen'
 
 type Props = {checklists: Checklist[]; listCursor: number; width: number; showBar: boolean}
 
-/** Home list: selected row is the blue arrow + blue title. No fill, no box. */
+/** Home list: selected row is the blue arrow + blue title. Last row is a faint generate action. */
 export function Dashboard({checklists, listCursor, width, showBar}: Props) {
   const theme = useTheme()
 
@@ -28,6 +29,8 @@ export function Dashboard({checklists, listCursor, width, showBar}: Props) {
   }))
   const numW = String(checklists.length).length
   const titleW = Math.max(4, width - 3 - (numW + 2) - (showBar ? 11 : 0) - countW)
+
+  const generateSelected = listCursor === checklists.length
 
   return (
     <Box flexDirection="column">
@@ -68,6 +71,19 @@ export function Dashboard({checklists, listCursor, width, showBar}: Props) {
           </Box>
         )
       })}
+      <Gap />
+      <Box key="generate" width={width} flexShrink={0}>
+        <Text>
+          <Text color={theme.accent} bold>{generateSelected ? '❯ ' : '  '}</Text>
+          <Text
+            color={generateSelected ? theme.accent : theme.muted}
+            dimColor={!generateSelected && theme.dimMuted}
+            bold={generateSelected}
+          >
+            + generate checklist
+          </Text>
+        </Text>
+      </Box>
     </Box>
   )
 }
