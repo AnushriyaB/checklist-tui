@@ -1,29 +1,22 @@
 #!/usr/bin/env node
 import React from 'react'
-import {readFileSync} from 'node:fs'
-import {dirname, join} from 'node:path'
-import {fileURLToPath} from 'node:url'
 import {render} from 'ink'
 import {App} from './app'
+import {HELP, packageVersion, runSelfCommand} from './lib/self'
 
-const flag = process.argv[2]
+const args = process.argv.slice(2)
+const flag = args[0]
 if (flag === '-h' || flag === '--help') {
-  process.stdout.write(
-    '\n  A checklist app for your terminal.\n' +
-    '\n    checklist\n' +
-    '    checklist "trip to sf for 10 days"\n\n',
-  )
+  process.stdout.write(HELP)
   process.exit(0)
 }
 if (flag === '-v' || flag === '--version') {
-  try {
-    const pkg = join(dirname(fileURLToPath(import.meta.url)), '..', 'package.json')
-    process.stdout.write(`${JSON.parse(readFileSync(pkg, 'utf8')).version}\n`)
-  } catch {
-    process.stdout.write('0.1.3\n')
-  }
+  process.stdout.write(`${packageVersion()}\n`)
   process.exit(0)
 }
+
+const self = await runSelfCommand(args)
+if (self != null) process.exit(self)
 
 // Own the screen via the alternate buffer so the app draws on a clean slate and
 // the shell + scrollback come back on exit.

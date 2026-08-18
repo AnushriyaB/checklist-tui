@@ -2,9 +2,6 @@
 
 // src/cli.tsx
 import React13 from "react";
-import { readFileSync } from "fs";
-import { dirname, join } from "path";
-import { fileURLToPath } from "url";
 import { render } from "ink";
 
 // src/app.tsx
@@ -242,8 +239,8 @@ import { promises as fs } from "fs";
 import os from "os";
 import path from "path";
 import { randomUUID } from "crypto";
-var DIR = path.join(os.homedir(), ".config", "checklist");
-var FILE = path.join(DIR, "data.json");
+var DATA_DIR = path.join(os.homedir(), ".config", "checklist");
+var FILE = path.join(DATA_DIR, "data.json");
 async function loadChecklists() {
   try {
     const raw = await fs.readFile(FILE, "utf8");
@@ -254,7 +251,7 @@ async function loadChecklists() {
   }
 }
 async function saveChecklists(checklists) {
-  await fs.mkdir(DIR, { recursive: true });
+  await fs.mkdir(DATA_DIR, { recursive: true });
   await fs.writeFile(FILE, JSON.stringify({ checklists }, null, 2), "utf8");
 }
 var newChecklist = (title) => ({
@@ -851,24 +848,188 @@ function AppInner({ initialGoal: initialGoal2 }) {
   })()), /* @__PURE__ */ React12.createElement(Shortcuts, { items: hints }));
 }
 
-// src/cli.tsx
-var flag = process.argv[2];
-if (flag === "-h" || flag === "--help") {
-  process.stdout.write(
-    '\n  A checklist app for your terminal.\n\n    checklist\n    checklist "trip to sf for 10 days"\n\n'
+// src/lib/self.ts
+import { existsSync, readFileSync } from "fs";
+import { createInterface } from "readline/promises";
+import { dirname, join } from "path";
+import { fileURLToPath } from "url";
+import { spawnSync } from "child_process";
+import os2 from "os";
+var PACKAGE = "checklist-tui";
+var COMMANDS = /* @__PURE__ */ new Set(["update", "uninstall", "unistall"]);
+var tty = Boolean(process.stdout.isTTY) && !process.env.NO_COLOR;
+var wrap = (code, s) => tty ? `\x1B[${code}m${s}\x1B[0m` : s;
+var blue = (s) => wrap(34, s);
+var bold = (s) => wrap(1, s);
+var ok = `${bold("[")}${blue("\u2713")}${bold("]")}`;
+var HELP2 = '\n  A checklist app for your terminal.\n\n    checklist\n    checklist "trip to sf for 10 days"\n    checklist update\n    checklist uninstall\n\n';
+function say(body) {
+  process.stdout.write(body.endsWith("\n") ? body : `${body}
+`);
+}
+function dataPath() {
+  return DATA_DIR.replace(os2.homedir(), "~");
+}
+function packageVersion() {
+  try {
+    const pkg = join(dirname(fileURLToPath(import.meta.url)), "..", "package.json");
+    return JSON.parse(readFileSync(pkg, "utf8")).version;
+  } catch {
+    return "0.1.4";
+  }
+}
+function npmBin() {
+  const local = join(dirname(process.execPath), process.platform === "win32" ? "npm.cmd" : "npm");
+  return existsSync(local) ? local : process.platform === "win32" ? "npm.cmd" : "npm";
+}
+function npm(args2) {
+  const result = spawnSync(npmBin(), args2, {
+    encoding: "utf8",
+    env: process.env,
+    stdio: ["ignore", "pipe", "pipe"]
+  });
+  return {
+    status: result.status,
+    stdout: String(result.stdout ?? ""),
+    stderr: String(result.stderr ?? "")
+  };
+}
+function npmError(result) {
+  return (result.stderr || result.stdout || "npm failed").trim();
+}
+function globalVersion() {
+  const result = npm(["list", "-g", "--json", "--depth=0", PACKAGE]);
+  try {
+    const json = JSON.parse(result.stdout || "{}");
+    return json.dependencies?.[PACKAGE]?.version ?? null;
+  } catch {
+    return null;
+  }
+}
+function latestVersion() {
+  const result = npm(["view", PACKAGE, "version"]);
+  if (result.status !== 0) return null;
+  const version = (result.stdout || "").trim();
+  return version || null;
+}
+function hasFlag(flags, ...names) {
+  return flags.some((flag2) => names.includes(flag2));
+}
+async function confirm(question) {
+  if (!process.stdin.isTTY) return false;
+  const rl = createInterface({ input: process.stdin, output: process.stdout });
+  try {
+    const answer = (await rl.question(question)).trim().toLowerCase();
+    return answer === "y" || answer === "yes";
+  } finally {
+    rl.close();
+  }
+}
+function updateHelp() {
+  say("\n  Install the latest Checklist from npm.\n\n    checklist update\n\n");
+}
+function uninstallHelp() {
+  say(
+    "\n  Remove the Checklist command. Lists stay on this machine.\n\n    checklist uninstall\n    checklist uninstall -y\n\n"
   );
+}
+async function update() {
+  const installed = globalVersion();
+  const latest = latestVersion();
+  if (installed && latest && installed === latest) {
+    say(`
+  ${ok} ${bold("Already the latest")} (${installed})
+
+`);
+    return 0;
+  }
+  say(`
+  Updating Checklist\u2026
+`);
+  const result = npm(["install", "-g", `${PACKAGE}@latest`]);
+  if (result.status !== 0) {
+    say(`
+  Couldn\u2019t update.
+
+    ${npmError(result).split("\n")[0]}
+
+`);
+    return 1;
+  }
+  const next = globalVersion() ?? latest ?? packageVersion();
+  say(`
+  ${ok} ${bold("Updated to")} ${next}
+
+    ${blue("checklist")}
+
+`);
+  return 0;
+}
+async function uninstall(yes) {
+  if (!globalVersion()) {
+    say("\n  Checklist isn\u2019t installed as a global command.\n\n");
+    return 1;
+  }
+  if (!yes) {
+    if (!process.stdin.isTTY) {
+      say("\n  Pass -y to uninstall.\n\n");
+      return 1;
+    }
+    const okToRemove = await confirm("  Remove Checklist from this machine? [y/N] ");
+    if (!okToRemove) {
+      say("  Kept.\n\n");
+      return 0;
+    }
+  }
+  const result = npm(["uninstall", "-g", PACKAGE]);
+  if (result.status !== 0) {
+    say(`
+  Couldn\u2019t uninstall.
+
+    ${npmError(result).split("\n")[0]}
+
+`);
+    return 1;
+  }
+  say(
+    `
+  ${ok} ${bold("Checklist")} is uninstalled.
+
+    Your lists are still at ${blue(dataPath())}
+
+`
+  );
+  return 0;
+}
+async function runSelfCommand(args2) {
+  const head = args2[0]?.toLowerCase();
+  if (!head || !COMMANDS.has(head)) return null;
+  const flags = args2.slice(1);
+  if (flags.some((flag2) => !flag2.startsWith("-"))) return null;
+  const command = head === "unistall" ? "uninstall" : head;
+  if (hasFlag(flags, "-h", "--help")) {
+    if (command === "update") updateHelp();
+    else uninstallHelp();
+    return 0;
+  }
+  if (command === "update") return update();
+  return uninstall(hasFlag(flags, "-y", "--yes"));
+}
+
+// src/cli.tsx
+var args = process.argv.slice(2);
+var flag = args[0];
+if (flag === "-h" || flag === "--help") {
+  process.stdout.write(HELP2);
   process.exit(0);
 }
 if (flag === "-v" || flag === "--version") {
-  try {
-    const pkg = join(dirname(fileURLToPath(import.meta.url)), "..", "package.json");
-    process.stdout.write(`${JSON.parse(readFileSync(pkg, "utf8")).version}
+  process.stdout.write(`${packageVersion()}
 `);
-  } catch {
-    process.stdout.write("0.1.3\n");
-  }
   process.exit(0);
 }
+var self = await runSelfCommand(args);
+if (self != null) process.exit(self);
 var ESC = String.fromCharCode(27);
 var isTTY = Boolean(process.stdout.isTTY);
 var cleaned = false;

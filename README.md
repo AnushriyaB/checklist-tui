@@ -17,6 +17,8 @@ After that, from **any folder**:
 ```bash
 checklist
 checklist "trip to sf for 10 days"
+checklist update
+checklist uninstall
 ```
 
 Press **?** for keys. Press **g** to generate.

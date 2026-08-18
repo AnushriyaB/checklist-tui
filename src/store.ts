@@ -15,8 +15,8 @@ export type Checklist = {id: string; title: string; groups: Group[]; createdAt: 
 // --- Where it lives ---------------------------------------------------------
 // One JSON file under the user's config dir. No database, no accounts — the
 // whole point of the TUI version.
-const DIR = path.join(os.homedir(), '.config', 'checklist')
-const FILE = path.join(DIR, 'data.json')
+export const DATA_DIR = path.join(os.homedir(), '.config', 'checklist')
+const FILE = path.join(DATA_DIR, 'data.json')
 
 export async function loadChecklists(): Promise<Checklist[]> {
   try {
@@ -30,7 +30,7 @@ export async function loadChecklists(): Promise<Checklist[]> {
 }
 
 export async function saveChecklists(checklists: Checklist[]): Promise<void> {
-  await fs.mkdir(DIR, {recursive: true})
+  await fs.mkdir(DATA_DIR, {recursive: true})
   await fs.writeFile(FILE, JSON.stringify({checklists}, null, 2), 'utf8')
 }
 
