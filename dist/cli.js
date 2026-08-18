@@ -333,6 +333,7 @@ function Dashboard({ checklists, listCursor, width, showBar }) {
   }));
   const numW = String(checklists.length).length;
   const titleW = Math.max(4, width - 3 - (numW + 2) - (showBar ? 11 : 0) - countW);
+  const generateSelected = listCursor === checklists.length;
   return /* @__PURE__ */ React9.createElement(Box5, { flexDirection: "column" }, checklists.map((c, i) => {
     const { done, total } = progress(c);
     const selected = i === listCursor;
@@ -343,7 +344,15 @@ function Dashboard({ checklists, listCursor, width, showBar }) {
     const complete = total > 0 && done === total;
     const titleColor = selected ? theme.accent : theme.text;
     return /* @__PURE__ */ React9.createElement(Box5, { key: c.id, width, flexShrink: 0 }, /* @__PURE__ */ React9.createElement(Text8, null, /* @__PURE__ */ React9.createElement(Text8, { color: theme.accent, bold: true }, selected ? "\u276F " : "  "), /* @__PURE__ */ React9.createElement(Text8, { color: theme.muted, dimColor: theme.dimMuted }, `${i + 1}`.padStart(numW) + ". "), /* @__PURE__ */ React9.createElement(Text8, { color: titleColor, bold: selected }, title), /* @__PURE__ */ React9.createElement(Text8, null, " "), showBar ? complete ? /* @__PURE__ */ React9.createElement(Text8, null, /* @__PURE__ */ React9.createElement(Text8, { color: theme.accent, bold: true }, "Completed".padEnd(barW)), /* @__PURE__ */ React9.createElement(Text8, null, " ")) : /* @__PURE__ */ React9.createElement(Text8, null, /* @__PURE__ */ React9.createElement(Text8, { color: selected ? theme.accent : theme.text }, "\u2588".repeat(filled)), /* @__PURE__ */ React9.createElement(Text8, { color: theme.muted, dimColor: theme.dimMuted }, "\u2591".repeat(barW - filled)), /* @__PURE__ */ React9.createElement(Text8, null, " ")) : null, /* @__PURE__ */ React9.createElement(Text8, { color: complete || selected ? theme.accent : theme.muted, dimColor: !complete && !selected && theme.dimMuted }, countStr)));
-  }));
+  }), /* @__PURE__ */ React9.createElement(Gap, null), /* @__PURE__ */ React9.createElement(Box5, { key: "generate", width, flexShrink: 0 }, /* @__PURE__ */ React9.createElement(Text8, null, /* @__PURE__ */ React9.createElement(Text8, { color: theme.accent, bold: true }, generateSelected ? "\u276F " : "  "), /* @__PURE__ */ React9.createElement(
+    Text8,
+    {
+      color: generateSelected ? theme.accent : theme.muted,
+      dimColor: !generateSelected && theme.dimMuted,
+      bold: generateSelected
+    },
+    "+ generate checklist"
+  ))));
 }
 
 // src/views/detail.tsx
@@ -500,14 +509,11 @@ var HINTS = {
 };
 var RETRY_LABEL = "\u21B5  Try again";
 var SUGGESTIONS = [
-  "Plan a 3-day trip to Lisbon",
-  "Run a usability test for the new onboarding flow",
-  "Audit and clean up our design system components",
-  "Ship a REST API with authentication and tests",
-  "Migrate the web app from Webpack to Vite",
-  "Write a PRD for a notifications feature",
-  "Plan a product launch for Q3",
-  "Turn this project into a portfolio case study"
+  "plan grandma's 60th birthday",
+  "trip to sf this weekend",
+  "return an amazon package",
+  "host dinner for six",
+  "move apartments"
 ];
 function App({ initialGoal: initialGoal2 }) {
   return /* @__PURE__ */ React12.createElement(ThemeProvider, { mode: "dark" }, /* @__PURE__ */ React12.createElement(AppInner, { initialGoal: initialGoal2 }));
@@ -697,7 +703,7 @@ function AppInner({ initialGoal: initialGoal2 }) {
       if (input === "y") {
         const next = checklists.filter((c) => c.id !== phase.id);
         persist(next);
-        setListCursor((c) => Math.max(0, Math.min(c, next.length - 1)));
+        setListCursor((c) => Math.max(0, Math.min(c, next.length)));
         setPhase({ name: "list" });
       } else if (input === "n" || key.escape) {
         setPhase({ name: "list" });
@@ -724,13 +730,20 @@ function AppInner({ initialGoal: initialGoal2 }) {
       return;
     }
     if (phase.name === "list") {
+      const last = checklists.length > 0 ? checklists.length : 0;
       if (key.upArrow || input === "k") setListCursor((c) => Math.max(0, c - 1));
-      if (key.downArrow || input === "j") setListCursor((c) => Math.min(checklists.length - 1, c + 1));
-      const current = checklists[listCursor];
-      if (key.return && current) {
-        setTaskFilter("all");
-        setTaskCursor(0);
-        setPhase({ name: "detail", id: current.id });
+      if (key.downArrow || input === "j") setListCursor((c) => Math.min(last, c + 1));
+      const onGenerate = checklists.length > 0 && listCursor === checklists.length;
+      const current = onGenerate ? void 0 : checklists[listCursor];
+      if (key.return) {
+        if (onGenerate) {
+          setDraft("");
+          setPhase({ name: "prompt" });
+        } else if (current) {
+          setTaskFilter("all");
+          setTaskCursor(0);
+          setPhase({ name: "detail", id: current.id });
+        }
       }
       if (input === "g") {
         setDraft("");
@@ -778,7 +791,8 @@ function AppInner({ initialGoal: initialGoal2 }) {
       return;
     }
   }, { isActive: Boolean(process.stdin.isTTY) });
-  const baseHints = phase.name === "genError" ? [["\u21B5", "try again"], ...HINTS.genError] : HINTS[phase.name];
+  const onGenerateRow = phase.name === "list" && checklists.length > 0 && listCursor === checklists.length;
+  const baseHints = phase.name === "genError" ? [["\u21B5", "try again"], ...HINTS.genError] : onGenerateRow ? [["\u21B5", "generate"], ["?", "help"]] : HINTS[phase.name];
   const hints = phase.name === "list" ? [...baseHints, ["^c", "quit"]] : baseHints;
   if (width < 24) {
     return /* @__PURE__ */ React12.createElement(Screen, null, /* @__PURE__ */ React12.createElement(Text11, { color: theme.muted, dimColor: theme.dimMuted }, "Make the terminal a little wider \u2194"));
@@ -792,7 +806,7 @@ function AppInner({ initialGoal: initialGoal2 }) {
       onSubmit: submitNew,
       placeholder: "e.g. Plan a weekend trip"
     }
-  ))), phase.name === "prompt" && /* @__PURE__ */ React12.createElement(Box7, { flexDirection: "column", width }, /* @__PURE__ */ React12.createElement(Text11, { color: theme.text }, "What do you want to get done?"), /* @__PURE__ */ React12.createElement(Text11, { color: theme.muted, dimColor: theme.dimMuted }, "You'll get a step-by-step checklist."), /* @__PURE__ */ React12.createElement(Gap, null), /* @__PURE__ */ React12.createElement(Box7, null, /* @__PURE__ */ React12.createElement(Text11, { color: theme.accent }, "\u276F "), /* @__PURE__ */ React12.createElement(Box7, { flexGrow: 1, flexShrink: 1, minWidth: 0 }, /* @__PURE__ */ React12.createElement(
+  ))), phase.name === "prompt" && /* @__PURE__ */ React12.createElement(Box7, { flexDirection: "column", width }, /* @__PURE__ */ React12.createElement(Text11, { color: theme.text }, "What do you want to get done?"), /* @__PURE__ */ React12.createElement(Gap, null), /* @__PURE__ */ React12.createElement(Box7, null, /* @__PURE__ */ React12.createElement(Text11, { color: theme.accent }, "\u276F "), /* @__PURE__ */ React12.createElement(Box7, { flexGrow: 1, flexShrink: 1, minWidth: 0 }, /* @__PURE__ */ React12.createElement(
     TextField,
     {
       value: draft,
@@ -804,7 +818,7 @@ function AppInner({ initialGoal: initialGoal2 }) {
       },
       placeholder: SUGGESTIONS[suggestionIndex]
     }
-  )), !draft ? /* @__PURE__ */ React12.createElement(Box7, { flexShrink: 0, marginLeft: 2 }, /* @__PURE__ */ React12.createElement(Text11, { color: theme.muted, dimColor: theme.dimMuted }, "\u21E5 tab")) : null), /* @__PURE__ */ React12.createElement(Box7, { flexShrink: 0 }, /* @__PURE__ */ React12.createElement(
+  )), !draft ? /* @__PURE__ */ React12.createElement(Box7, { flexShrink: 0, marginLeft: 2 }, /* @__PURE__ */ React12.createElement(Text11, { color: theme.muted, dimColor: theme.dimMuted }, "\u21E5 tab")) : null), /* @__PURE__ */ React12.createElement(Gap, null), /* @__PURE__ */ React12.createElement(Box7, { flexShrink: 0 }, /* @__PURE__ */ React12.createElement(
     Text11,
     {
       color: draft.length > MAX_GOAL ? theme.danger ?? "red" : theme.muted,

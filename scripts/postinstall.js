@@ -1,12 +1,11 @@
 #!/usr/bin/env node
-import {execFileSync, spawn, spawnSync} from 'node:child_process'
+import {execFileSync, spawn} from 'node:child_process'
 import fs from 'node:fs'
 import path from 'node:path'
 import {fileURLToPath} from 'node:url'
 
 const self = fileURLToPath(import.meta.url)
 const root = path.join(path.dirname(self), '..')
-const cli = path.join(root, 'dist', 'cli.js')
 
 function banner() {
   const color = !process.env.NO_COLOR
@@ -110,13 +109,6 @@ const fd = openTty(ttyPath)
 if (fd == null) process.exit(0)
 
 writeBanner(fd)
-
-if (fs.existsSync(cli)) {
-  spawnSync(process.execPath, [cli], {
-    stdio: [fd, fd, fd],
-    env: process.env,
-  })
-}
 
 const cleaner = spawn(process.execPath, [self], {
   detached: true,
