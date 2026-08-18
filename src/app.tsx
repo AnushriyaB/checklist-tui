@@ -58,17 +58,13 @@ const HINTS: Record<Phase['name'], Array<[string, string]>> = {
 
 const RETRY_LABEL = '↵  Try again'
 
-// Goal suggestions across the perspectives the user cares about (design / eng /
-// PM), plus one everyday one. Tab in the prompt fills the current one.
+// Tab in the generate prompt fills the current one, then advances.
 const SUGGESTIONS = [
-  'Plan a 3-day trip to Lisbon',
-  'Run a usability test for the new onboarding flow',
-  'Audit and clean up our design system components',
-  'Ship a REST API with authentication and tests',
-  'Migrate the web app from Webpack to Vite',
-  'Write a PRD for a notifications feature',
-  'Plan a product launch for Q3',
-  'Turn this project into a portfolio case study',
+  "plan grandma's 60th birthday",
+  'trip to sf this weekend',
+  'return an amazon package',
+  'host dinner for six',
+  'move apartments',
 ]
 
 export function App({initialGoal}: {initialGoal?: string}) {
@@ -466,7 +462,6 @@ function AppInner({initialGoal}: {initialGoal?: string}) {
       {phase.name === 'prompt' && (
         <Box flexDirection="column" width={width}>
           <Text color={theme.text}>What do you want to get done?</Text>
-          <Text color={theme.muted} dimColor={theme.dimMuted}>You'll get a step-by-step checklist.</Text>
           <Gap />
           <Box>
             <Text color={theme.accent}>❯ </Text>
@@ -488,6 +483,7 @@ function AppInner({initialGoal}: {initialGoal?: string}) {
               </Box>
             ) : null}
           </Box>
+          <Gap />
           <Box flexShrink={0}>
             <Text
               color={draft.length > MAX_GOAL ? (theme.danger ?? 'red') : theme.muted}
