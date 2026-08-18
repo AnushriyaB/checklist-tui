@@ -72,9 +72,28 @@ function extractJson(text: string): unknown {
   let s = text.trim()
   const fenced = s.match(/```(?:json)?\s*([\s\S]*?)```/i)
   if (fenced) s = fenced[1]!.trim()
+  let found: {title: string; items: unknown} | null = null
+  for (let i = 0; i < s.length; i++) {
+    if (s[i] !== '{') continue
+    let depth = 0
+    for (let j = i; j < s.length; j++) {
+      if (s[j] === '{') depth++
+      else if (s[j] === '}') {
+        depth--
+        if (depth === 0) {
+          try {
+            const obj = JSON.parse(s.slice(i, j + 1)) as {title?: unknown; items?: unknown}
+            if (typeof obj?.title === 'string' && Array.isArray(obj.items)) found = obj as {title: string; items: unknown}
+          } catch {}
+          break
+        }
+      }
+    }
+  }
+  if (found) return found
   const first = s.indexOf('{')
   const last = s.lastIndexOf('}')
-  if (first !== -1 && last > first) s = s.slice(first, last + 1)
+  if (first !== -1 && last > first) return JSON.parse(s.slice(first, last + 1))
   return JSON.parse(s)
 }
 
@@ -90,6 +109,11 @@ function messageText(content: unknown): string {
       .join('')
   }
   return ''
+}
+
+function assistantText(message: {content?: unknown; reasoning?: unknown} | undefined): string {
+  if (!message) return ''
+  return messageText(message.content) || messageText(message.reasoning)
 }
 
 function needsWebSearch(goal: string): boolean {
@@ -130,6 +154,7 @@ export async function POST(request: Request) {
       {role: 'user', content: `${goal}\n\nToday is ${today}.`},
     ],
     temperature: 0.5,
+    reasoning: {effort: 'low'},
   }
   if (search) {
     payload.tools = [
@@ -159,10 +184,13 @@ export async function POST(request: Request) {
   if (!response.ok) return json(502, {error: 'upstream'})
 
   const data = (await response.json().catch(() => null)) as
-    | {choices?: Array<{message?: {content?: unknown}}>}
+    | {choices?: Array<{message?: {content?: unknown; reasoning?: unknown}}>}
     | null
-  const content = messageText(data?.choices?.[0]?.message?.content)
-  if (!content) return json(502, {error: 'bad_response'})
+  const content = assistantText(data?.choices?.[0]?.message)
+  if (!content) {
+    console.error('generate empty message', JSON.stringify(data?.choices?.[0]?.message ?? data).slice(0, 500))
+    return json(502, {error: 'bad_response'})
+  }
 
   try {
     const parsed = extractJson(content) as {title?: unknown; items?: unknown}
@@ -170,7 +198,8 @@ export async function POST(request: Request) {
       return json(502, {error: 'bad_response'})
     }
     return json(200, {title: parsed.title, items: parsed.items})
-  } catch {
+  } catch (error) {
+    console.error('generate parse', content.slice(0, 400), error)
     return json(502, {error: 'bad_response'})
   }
 }
