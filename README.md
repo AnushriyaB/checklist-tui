@@ -1,20 +1,45 @@
 # checklist-tui
 
-Write a note. Get a checklist. Check things off in the terminal.
+turn a goal into an actionable checklist. check it off. get it done. All in your terminal.
 
-Saved locally. No account. No API key.
+<img src="assets/home.png" alt="Checklist home screen with saved checklists and progress" width="100%">
 
-## Install once
+## Install
 
-Needs [Node 18+](https://nodejs.org). Then:
-
-```bash
+```sh
 npm install -g checklist-tui
 ```
 
-- Terminal: `checklist` · `checklist "…"` · `checklist update` · `checklist uninstall` · `checklist -h` · `checklist -v`
-- App: `↵` open · `g` generate · `n` new · `d` delete · `space` toggle · `a` add · `e` edit · `x` delete · `/` filter · `?` help · `esc` back · `m` sound · `^c` quit
+## Usage
 
-Inspired by [yoinks](https://github.com/pablostanley/yoinks) by Pablo Stanley.
+```sh
+$ checklist                              # open your saved checklists
+$ checklist "plan grandma's birthday"    # generate one immediately
+$ checklist update                       # install the latest version
+$ checklist uninstall                    # remove the app
+```
+
+Checklist takes over the terminal and restores it when you quit. Use ↑/↓ to
+move, enter to open, and space to check off a task. Press `g` to generate,
+`n` to create one yourself, `?` for every shortcut, and `^c` to quit.
+
+Your checklists are saved locally and stay on your machine.
+
+Goals are sent to the generation service only when you generate a checklist.
+No account or API key is required.
+
+## Development
+
+```sh
+npm install
+npm run dev
+npm run build
+npm run typecheck
+```
+
+To try the command globally without publishing, run `npm link`, then use
+`checklist` from any folder.
+
+## License
 
 Source is public so you can read it. Not licensed for reuse.
